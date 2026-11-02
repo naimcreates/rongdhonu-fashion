@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>রঙধনু ফ্যাশন — বুটিক</title>
+<meta name="description" content="রঙধনু ফ্যাশন — হাতে বাছাই করা শাড়ি, থ্রি-পিস ও কুর্তি। সারা দেশে ক্যাশ অন ডেলিভারি।">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="ann" id="ann"></div>
+<header class="top">
+  <h1>🌈 রঙধনু ফ্যাশন</h1><span class="sp"></span>
+  <button class="btn ghost small" onclick="showTrack()">অর্ডার ট্র্যাক করুন</button>
+  <button class="btn ghost small" onclick="showWishlist()">♥ পছন্দ <span id="wishCount"></span></button>
+  <button class="btn small" onclick="showCart()">🛒 কার্ট <span id="cartCount">0</span></button>
+  <a class="btn ghost small" href="/admin">অ্যাডমিন</a>
+</header>
+<div class="wrap">
+  <div class="hero">
+    <h2 style="margin:0">হাতে বাছাই করা শাড়ি, থ্রি-পিস ও কুর্তি</h2>
+    <p>সারা দেশে ক্যাশ অন ডেলিভারি। বিকাশ / নগদ / COD — সব পেমেন্টেই অর্ডার করা যায়।</p>
+    <div class="grid" id="heroGrid"></div>
+  </div>
+  <div class="toolbar">
+    <input id="q" placeholder="পণ্য, SKU বা ক্যাটাগরি খুঁজুন…" oninput="loadProducts()">
+    <select id="cat" onchange="loadProducts()"><option value="">সব ক্যাটাগরি</option></select>
+    <select id="sort" onchange="loadProducts()">
+      <option value="">সাজান: ডিফল্ট</option><option value="price-asc">দাম: কম → বেশি</option>
+      <option value="price-desc">দাম: বেশি → কম</option><option value="rating">রেটিং</option>
+    </select>
+  </div>
+  <div id="msg"></div>
+  <div class="products" id="products"></div>
+  <section id="about" style="margin-top:24px"></section>
+</div>
+<footer id="footer"></footer>
+
+<div class="modal" id="modal"><div class="box" id="modalBox"></div></div>
+<script src="/app.js"></script>
+</body>
+</html>

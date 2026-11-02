@@ -1,0 +1,1 @@
+{"dependencies":{"express":"^4.21.2"},"description":"Rongdhonu Fashion — demo boutique storefront with admin for Naim's website-building service","engines":{"node":">=22"},"license":"MIT","main":"server.js","name":"rongdhonu-fashion","scripts":{"dev":"node server.js","start":"node server.js"},"version":"1.0.0"}

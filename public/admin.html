@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>অ্যাডমিন — রঙধনু ফ্যাশন</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top"><h1>🌈 রঙধনু ফ্যাশন — অ্যাডমিন</h1><span class="sp"></span>
+<a class="btn ghost small" href="/">দোকান দেখুন</a>
+<button class="btn ghost small" id="logoutBtn" style="display:none" onclick="logout()">লগআউট</button></header>
+<div class="wrap" id="app">
+  <div class="card" style="max-width:380px;margin:40px auto">
+    <h2>অ্যাডমিন লগইন</h2>
+    <p style="color:#666;font-size:14px">ডেমো PIN: <b>1234</b> — Settings থেকে বদলে নিন।</p>
+    <label>PIN</label>
+    <div class="row"><input id="pin" type="password" inputmode="numeric" placeholder="••••">
+    <button class="btn ghost" onclick="const e=document.getElementById('pin');e.type=e.type==='password'?'text':'password'">দেখুন</button></div>
+    <p><button class="btn" onclick="login()">লগইন</button></p>
+    <div id="err"></div>
+  </div>
+</div>
+<script src="/admin.js"></script>
+</body>
+</html>
