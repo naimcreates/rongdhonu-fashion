@@ -1,0 +1,15 @@
+# Render Blueprint — one-click deploy for Rongdhonu Fashion
+# In Render dashboard: New → Blueprint → connect naimcreates/rongdhonu-fashion
+# Or: New → Web Service → connect the repo (build: npm install, start: npm start)
+services:
+  - type: web
+    name: rongdhonu-fashion
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
