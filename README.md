@@ -68,6 +68,23 @@ without overwriting anything that already exists.
 Exports: Orders CSV, Steadfast bulk CSV, Pathao/RedX CSV, Products CSV,
 full-shop JSON backup. Product CSV import (1–200 rows).
 
+## Product pictures
+
+Admin → পণ্য → each product can have a real picture, two ways:
+- **ছবির লিংক (URL)** — paste an `https://…` image link; it is shown on the
+  product card, product detail and as a thumbnail in the admin list.
+- **ছবি আপলোড করুন** — pick a JPG/PNG/WebP file (max 5MB); it is stored under
+  `public/uploads/` and served as `/uploads/…`. Uploads need admin write auth
+  (Viewer cannot upload or edit); wrong file types and oversize files are
+  rejected with a clear message.
+- Editing a product **keeps its existing picture** unless a new one is given;
+  "ছবি সরান" removes it. Settings also has a **হিরো ছবির লিংক** field — the
+  shop's top banner photo (empty = no hero photo).
+- ⚠️ **Render free tier is ephemeral: uploaded files in `public/uploads/` are
+  lost on restart/redeploy** (same as the SQLite file). For pictures that must
+  survive, use image URLs, or attach a Render Disk / object storage for real
+  use. Uploaded files are never committed to git (see `.gitignore`).
+
 ## Deploy on Render (free tier)
 
 A `render.yaml` Blueprint is included in this repo: on https://render.com →
@@ -118,10 +135,12 @@ inserted a fake sample product, the checkout showed no order summary before
 ordering, the promo popup could hijack an open cart/checkout modal, and the
 storefront showed a blank page when the API was slow (free-tier cold start).
 All fixed and re-tested. Testimonials are intentionally not seeded — real
-customer words only. The live Render URL currently returns 404
-(`x-render-routing: no-server`) on every path: no web service is running behind
-that hostname yet — check the Render dashboard (service type must be Web
-Service, not Static Site; check Events/Logs for a failed deploy).
+customer words only. Live site: https://rongdhonu.onrender.com (verified
+working 2026-11-02 — the earlier `rongdhonu-fashion.onrender.com` hostname
+had no service behind it; the live service is named `rongdhonu`). If the link
+ever shows 404, check the Render dashboard (service type must be Web Service,
+not Static Site; check Events/Logs for a failed deploy — the repo
+auto-deploys on push to `main`).
 
 ## Honest limits (v2.0)
 
@@ -135,7 +154,8 @@ Service, not Static Site; check Events/Logs for a failed deploy).
   an SMS gateway key.
 - **SQLite, not PostgreSQL.** The database is a local SQLite file. On a free
   hosting tier the file can reset — keep a JSON backup (Dashboard → Download).
-- **No deploy, domain, or real seller test yet.** No service worker / offline PWA.
+- **Deployed, but free tier.** Live at https://rongdhonu.onrender.com. No
+  domain, or real seller test yet. No service worker / offline PWA.
 
 ## API surface (highlights)
 

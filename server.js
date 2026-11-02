@@ -2,11 +2,24 @@
 // Run: npm install && npm start  ->  http://localhost:3000  (admin PIN 1234)
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
+const multer = require('multer');
 const { DatabaseSync } = require('node:sqlite');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'rongdhonu.db');
+// Uploaded product pictures live here (served statically as /uploads/...).
+// NOTE: on Render's free tier this folder is ephemeral — uploads vanish on
+// restart/redeploy. URL pictures (image_url) survive because they are links.
+const UPLOADS_DIR = path.join(__dirname, 'public', 'uploads');
+fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+function validImageUrl(u) {
+  if (u === undefined || u === null || u === '') return '';
+  const s = String(u).trim().slice(0, 500);
+  if (/^https?:\/\//i.test(s) || s.startsWith('/uploads/')) return s;
+  return null; // rejected: not a safe http(s) URL or a local upload path
+}
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 const db = new DatabaseSync(DB_PATH);
@@ -18,11 +31,11 @@ function escCsv(v) { return '"' + String(v ?? '').replace(/"/g, '""') + '"'; }
 
 // ---------- schema ----------
 db.exec(`
-CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY CHECK (id = 1), shop_name TEXT NOT NULL DEFAULT 'রঙধনু ফ্যাশন', whatsapp_number TEXT NOT NULL DEFAULT '8801700000000', bkash_number TEXT NOT NULL DEFAULT '', nagad_number TEXT NOT NULL DEFAULT '', delivery_inside INTEGER NOT NULL DEFAULT 60, delivery_outside INTEGER NOT NULL DEFAULT 120, free_delivery_threshold INTEGER NOT NULL DEFAULT 1000, announcement TEXT NOT NULL DEFAULT '', about_text TEXT NOT NULL DEFAULT '', delivery_info TEXT NOT NULL DEFAULT '', return_policy TEXT NOT NULL DEFAULT '', pin_hash TEXT NOT NULL DEFAULT '', business_email TEXT NOT NULL DEFAULT '', maps_url TEXT NOT NULL DEFAULT '', ga4_id TEXT NOT NULL DEFAULT '', pixel_id TEXT NOT NULL DEFAULT '', gsc_code TEXT NOT NULL DEFAULT '', support_package TEXT NOT NULL DEFAULT '', support_until TEXT NOT NULL DEFAULT '', promo_code TEXT NOT NULL DEFAULT 'WELCOME10', flash_name TEXT NOT NULL DEFAULT '', flash_percent INTEGER NOT NULL DEFAULT 0, flash_ends_at TEXT NOT NULL DEFAULT '', gift_wrap_fee INTEGER NOT NULL DEFAULT 50, loyalty_enabled INTEGER NOT NULL DEFAULT 1, combo_enabled INTEGER NOT NULL DEFAULT 1, combo_buy INTEGER NOT NULL DEFAULT 2, combo_free INTEGER NOT NULL DEFAULT 1, preorder_enabled INTEGER NOT NULL DEFAULT 1, steadfast_api_key TEXT NOT NULL DEFAULT '', steadfast_secret TEXT NOT NULL DEFAULT '', sms_api_key TEXT NOT NULL DEFAULT '', bkash_username TEXT NOT NULL DEFAULT '', nagad_username TEXT NOT NULL DEFAULT '', seo_title TEXT NOT NULL DEFAULT '', seo_description TEXT NOT NULL DEFAULT '', pickup_address TEXT NOT NULL DEFAULT '', hotline TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS settings (id INTEGER PRIMARY KEY CHECK (id = 1), shop_name TEXT NOT NULL DEFAULT 'রঙধনু ফ্যাশন', whatsapp_number TEXT NOT NULL DEFAULT '8801700000000', bkash_number TEXT NOT NULL DEFAULT '', nagad_number TEXT NOT NULL DEFAULT '', delivery_inside INTEGER NOT NULL DEFAULT 60, delivery_outside INTEGER NOT NULL DEFAULT 120, free_delivery_threshold INTEGER NOT NULL DEFAULT 1000, announcement TEXT NOT NULL DEFAULT '', about_text TEXT NOT NULL DEFAULT '', delivery_info TEXT NOT NULL DEFAULT '', return_policy TEXT NOT NULL DEFAULT '', pin_hash TEXT NOT NULL DEFAULT '', business_email TEXT NOT NULL DEFAULT '', maps_url TEXT NOT NULL DEFAULT '', ga4_id TEXT NOT NULL DEFAULT '', pixel_id TEXT NOT NULL DEFAULT '', gsc_code TEXT NOT NULL DEFAULT '', support_package TEXT NOT NULL DEFAULT '', support_until TEXT NOT NULL DEFAULT '', promo_code TEXT NOT NULL DEFAULT 'WELCOME10', flash_name TEXT NOT NULL DEFAULT '', flash_percent INTEGER NOT NULL DEFAULT 0, flash_ends_at TEXT NOT NULL DEFAULT '', gift_wrap_fee INTEGER NOT NULL DEFAULT 50, loyalty_enabled INTEGER NOT NULL DEFAULT 1, combo_enabled INTEGER NOT NULL DEFAULT 1, combo_buy INTEGER NOT NULL DEFAULT 2, combo_free INTEGER NOT NULL DEFAULT 1, preorder_enabled INTEGER NOT NULL DEFAULT 1, steadfast_api_key TEXT NOT NULL DEFAULT '', steadfast_secret TEXT NOT NULL DEFAULT '', sms_api_key TEXT NOT NULL DEFAULT '', bkash_username TEXT NOT NULL DEFAULT '', nagad_username TEXT NOT NULL DEFAULT '', seo_title TEXT NOT NULL DEFAULT '', seo_description TEXT NOT NULL DEFAULT '', pickup_address TEXT NOT NULL DEFAULT '', hotline TEXT NOT NULL DEFAULT '', hero_image_url TEXT NOT NULL DEFAULT '');
 CREATE TABLE IF NOT EXISTS categories (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, parent_id INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS subcategories (id INTEGER PRIMARY KEY AUTOINCREMENT, category_id INTEGER NOT NULL, name TEXT NOT NULL, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS collections (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', product_ids TEXT NOT NULL DEFAULT '[]', active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT NOT NULL, price INTEGER NOT NULL, cost_price INTEGER NOT NULL DEFAULT 0, stock INTEGER NOT NULL DEFAULT 0, sku TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', image_emoji TEXT NOT NULL DEFAULT '', featured INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, seo_title TEXT NOT NULL DEFAULT '', seo_description TEXT NOT NULL DEFAULT '', vendor_id INTEGER NOT NULL DEFAULT 0, allow_preorder INTEGER NOT NULL DEFAULT 0, preorder_eta TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS products (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, category TEXT NOT NULL, price INTEGER NOT NULL, cost_price INTEGER NOT NULL DEFAULT 0, stock INTEGER NOT NULL DEFAULT 0, sku TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', image_emoji TEXT NOT NULL DEFAULT '', image_url TEXT NOT NULL DEFAULT '', featured INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1, seo_title TEXT NOT NULL DEFAULT '', seo_description TEXT NOT NULL DEFAULT '', vendor_id INTEGER NOT NULL DEFAULT 0, allow_preorder INTEGER NOT NULL DEFAULT 0, preorder_eta TEXT NOT NULL DEFAULT '', tags TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS variants (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE, size TEXT NOT NULL DEFAULT '', color TEXT NOT NULL DEFAULT '', sku TEXT NOT NULL DEFAULT '', price_delta INTEGER NOT NULL DEFAULT 0, stock INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS product_images (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL, label TEXT NOT NULL DEFAULT '', colour TEXT NOT NULL DEFAULT '#7a1f2b', created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS product_questions (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL, customer_name TEXT NOT NULL, question TEXT NOT NULL, answer TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
@@ -55,7 +68,7 @@ function addCol(table, col, def) {
   const cols = db.prepare('PRAGMA table_info(' + table + ')').all().map(c => c.name);
   if (!cols.includes(col)) { try { db.exec('ALTER TABLE ' + table + ' ADD COLUMN ' + col + ' ' + def); } catch (_) {} }
 }
-[['settings','business_email',"TEXT NOT NULL DEFAULT ''"],['settings','maps_url',"TEXT NOT NULL DEFAULT ''"],['settings','ga4_id',"TEXT NOT NULL DEFAULT ''"],['settings','pixel_id',"TEXT NOT NULL DEFAULT ''"],['settings','gsc_code',"TEXT NOT NULL DEFAULT ''"],['settings','support_package',"TEXT NOT NULL DEFAULT ''"],['settings','support_until',"TEXT NOT NULL DEFAULT ''"],['settings','promo_code',"TEXT NOT NULL DEFAULT 'WELCOME10'"],['settings','flash_name',"TEXT NOT NULL DEFAULT ''"],['settings','flash_percent',"INTEGER NOT NULL DEFAULT 0"],['settings','flash_ends_at',"TEXT NOT NULL DEFAULT ''"],['settings','gift_wrap_fee',"INTEGER NOT NULL DEFAULT 50"],['settings','loyalty_enabled',"INTEGER NOT NULL DEFAULT 1"],['settings','combo_enabled',"INTEGER NOT NULL DEFAULT 1"],['settings','combo_buy',"INTEGER NOT NULL DEFAULT 2"],['settings','combo_free',"INTEGER NOT NULL DEFAULT 1"],['settings','preorder_enabled',"INTEGER NOT NULL DEFAULT 1"],['settings','steadfast_api_key',"TEXT NOT NULL DEFAULT ''"],['settings','steadfast_secret',"TEXT NOT NULL DEFAULT ''"],['settings','sms_api_key',"TEXT NOT NULL DEFAULT ''"],['settings','bkash_username',"TEXT NOT NULL DEFAULT ''"],['settings','nagad_username',"TEXT NOT NULL DEFAULT ''"],['settings','seo_title',"TEXT NOT NULL DEFAULT ''"],['settings','seo_description',"TEXT NOT NULL DEFAULT ''"],['settings','pickup_address',"TEXT NOT NULL DEFAULT ''"],['settings','hotline',"TEXT NOT NULL DEFAULT ''"],['products','seo_title',"TEXT NOT NULL DEFAULT ''"],['products','seo_description',"TEXT NOT NULL DEFAULT ''"],['products','vendor_id',"INTEGER NOT NULL DEFAULT 0"],['products','allow_preorder',"INTEGER NOT NULL DEFAULT 0"],['products','preorder_eta',"TEXT NOT NULL DEFAULT ''"],['products','tags',"TEXT NOT NULL DEFAULT ''"],['categories','parent_id',"INTEGER NOT NULL DEFAULT 0"],['orders','flash_discount',"INTEGER NOT NULL DEFAULT 0"],['orders','bundle_discount',"INTEGER NOT NULL DEFAULT 0"],['orders','delivery_slot',"TEXT NOT NULL DEFAULT ''"],['orders','has_preorder',"INTEGER NOT NULL DEFAULT 0"],['orders','courier_label',"TEXT NOT NULL DEFAULT ''"],['order_items','variant_id',"INTEGER NOT NULL DEFAULT 0"],['order_items','stock_taken',"INTEGER NOT NULL DEFAULT 0"],['order_items','variant_taken',"INTEGER NOT NULL DEFAULT 0"],['customers','pin_hash',"TEXT NOT NULL DEFAULT ''"],['customers','referral_code',"TEXT NOT NULL DEFAULT ''"],['customers','referred_by',"TEXT NOT NULL DEFAULT ''"]].forEach(a => addCol(a[0], a[1], a[2]));
+[['settings','business_email',"TEXT NOT NULL DEFAULT ''"],['settings','maps_url',"TEXT NOT NULL DEFAULT ''"],['settings','ga4_id',"TEXT NOT NULL DEFAULT ''"],['settings','pixel_id',"TEXT NOT NULL DEFAULT ''"],['settings','gsc_code',"TEXT NOT NULL DEFAULT ''"],['settings','support_package',"TEXT NOT NULL DEFAULT ''"],['settings','support_until',"TEXT NOT NULL DEFAULT ''"],['settings','promo_code',"TEXT NOT NULL DEFAULT 'WELCOME10'"],['settings','flash_name',"TEXT NOT NULL DEFAULT ''"],['settings','flash_percent',"INTEGER NOT NULL DEFAULT 0"],['settings','flash_ends_at',"TEXT NOT NULL DEFAULT ''"],['settings','gift_wrap_fee',"INTEGER NOT NULL DEFAULT 50"],['settings','loyalty_enabled',"INTEGER NOT NULL DEFAULT 1"],['settings','combo_enabled',"INTEGER NOT NULL DEFAULT 1"],['settings','combo_buy',"INTEGER NOT NULL DEFAULT 2"],['settings','combo_free',"INTEGER NOT NULL DEFAULT 1"],['settings','preorder_enabled',"INTEGER NOT NULL DEFAULT 1"],['settings','steadfast_api_key',"TEXT NOT NULL DEFAULT ''"],['settings','steadfast_secret',"TEXT NOT NULL DEFAULT ''"],['settings','sms_api_key',"TEXT NOT NULL DEFAULT ''"],['settings','bkash_username',"TEXT NOT NULL DEFAULT ''"],['settings','nagad_username',"TEXT NOT NULL DEFAULT ''"],['settings','seo_title',"TEXT NOT NULL DEFAULT ''"],['settings','seo_description',"TEXT NOT NULL DEFAULT ''"],['settings','pickup_address',"TEXT NOT NULL DEFAULT ''"],['settings','hotline',"TEXT NOT NULL DEFAULT ''"],['products','image_url',"TEXT NOT NULL DEFAULT ''"],['settings','hero_image_url',"TEXT NOT NULL DEFAULT ''"],['products','seo_title',"TEXT NOT NULL DEFAULT ''"],['products','seo_description',"TEXT NOT NULL DEFAULT ''"],['products','vendor_id',"INTEGER NOT NULL DEFAULT 0"],['products','allow_preorder',"INTEGER NOT NULL DEFAULT 0"],['products','preorder_eta',"TEXT NOT NULL DEFAULT ''"],['products','tags',"TEXT NOT NULL DEFAULT ''"],['categories','parent_id',"INTEGER NOT NULL DEFAULT 0"],['orders','flash_discount',"INTEGER NOT NULL DEFAULT 0"],['orders','bundle_discount',"INTEGER NOT NULL DEFAULT 0"],['orders','delivery_slot',"TEXT NOT NULL DEFAULT ''"],['orders','has_preorder',"INTEGER NOT NULL DEFAULT 0"],['orders','courier_label',"TEXT NOT NULL DEFAULT ''"],['order_items','variant_id',"INTEGER NOT NULL DEFAULT 0"],['order_items','stock_taken',"INTEGER NOT NULL DEFAULT 0"],['order_items','variant_taken',"INTEGER NOT NULL DEFAULT 0"],['customers','pin_hash',"TEXT NOT NULL DEFAULT ''"],['customers','referral_code',"TEXT NOT NULL DEFAULT ''"],['customers','referred_by',"TEXT NOT NULL DEFAULT ''"]].forEach(a => addCol(a[0], a[1], a[2]));
 
 function audit(actor, action, detail) { try { db.prepare('INSERT INTO audit_logs (actor, action, detail, created_at) VALUES (?, ?, ?, ?)').run(actor, action, detail || '', nowIso()); } catch (_) {} }
 function notify(title, body) { try { db.prepare('INSERT INTO notifications (title, body, created_at) VALUES (?, ?, ?)').run(title, body || '', nowIso()); } catch (_) {} }
@@ -545,19 +558,69 @@ app.post('/api/admin/products', adminAuth, requireWrite, (req, res) => {
   const b = req.body || {};
   if (!b.name || !b.category || !(Number(b.price) > 0)) return res.status(400).json({ error: 'নাম, ক্যাটাগরি ও সঠিক দাম দিন' });
   if (Number(b.stock) < 0) return res.status(400).json({ error: 'স্টক ০ বা বেশি হতে হবে' });
-  const r = db.prepare('INSERT INTO products (name, category, price, cost_price, stock, sku, description, image_emoji, featured, seo_title, seo_description, vendor_id, allow_preorder, preorder_eta, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-    .run(String(b.name).slice(0, 120), String(b.category), money(b.price), money(b.cost_price), money(b.stock), String(b.sku || ''), String(b.description || ''), '', b.featured ? 1 : 0, String(b.seo_title || ''), String(b.seo_description || ''), Number(b.vendor_id || 0), b.allow_preorder ? 1 : 0, String(b.preorder_eta || ''), String(b.tags || ''), nowIso());
+  const imageUrl = validImageUrl(b.image_url);
+  if (imageUrl === null) return res.status(400).json({ error: 'ছবির লিংক সঠিক নয় — http(s) লিংক বা আপলোড করা ছবি দিন' });
+  try {
+  const r = db.prepare('INSERT INTO products (name, category, price, cost_price, stock, sku, description, image_emoji, image_url, featured, seo_title, seo_description, vendor_id, allow_preorder, preorder_eta, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+    .run(String(b.name).slice(0, 120), String(b.category), money(b.price), money(b.cost_price), money(b.stock), String(b.sku || ''), String(b.description || ''), '', imageUrl, b.featured ? 1 : 0, String(b.seo_title || ''), String(b.seo_description || ''), Number(b.vendor_id || 0), b.allow_preorder ? 1 : 0, String(b.preorder_eta || ''), String(b.tags || ''), nowIso());
   audit(req.admin.name, 'product_create', String(b.name));
   res.json({ ok: true, id: r.lastInsertRowid });
+  } catch (e) { return res.status(400).json({ error: 'পণ্য সেভ হয়নি — আবার চেষ্টা করুন' }); }
 });
 app.put('/api/admin/products/:id', adminAuth, requireWrite, (req, res) => {
   const b = req.body || {};
   if (!b.name || !(Number(b.price) > 0)) return res.status(400).json({ error: 'নাম ও সঠিক দাম দিন' });
   if (Number(b.stock) < 0) return res.status(400).json({ error: 'স্টক ০ বা বেশি হতে হবে' });
-  db.prepare('UPDATE products SET name=?, category=?, price=?, cost_price=?, stock=?, sku=?, description=?, featured=?, active=?, seo_title=?, seo_description=?, vendor_id=?, allow_preorder=?, preorder_eta=?, tags=? WHERE id=?')
-    .run(String(b.name).slice(0, 120), String(b.category), money(b.price), money(b.cost_price), money(b.stock), String(b.sku || ''), String(b.description || ''), b.featured ? 1 : 0, b.active === false ? 0 : 1, String(b.seo_title || ''), String(b.seo_description || ''), Number(b.vendor_id || 0), b.allow_preorder ? 1 : 0, String(b.preorder_eta || ''), String(b.tags || ''), Number(req.params.id));
+  const cur = db.prepare('SELECT * FROM products WHERE id = ?').get(Number(req.params.id));
+  if (!cur) return res.status(404).json({ error: 'পণ্য পাওয়া যায়নি' });
+  // Preserve the existing picture when no new picture is given — never wipe
+  // image_url just because the edit form did not send it. An explicit empty
+  // string means "remove the picture".
+  let imageUrl = cur.image_url || '';
+  if (b.image_url !== undefined) {
+    const v = validImageUrl(b.image_url);
+    if (v === null) return res.status(400).json({ error: 'ছবির লিংক সঠিক নয় — http(s) লিংক বা আপলোড করা ছবি দিন' });
+    imageUrl = v;
+  }
+  try {
+  db.prepare('UPDATE products SET name=?, category=?, price=?, cost_price=?, stock=?, sku=?, description=?, image_url=?, featured=?, active=?, seo_title=?, seo_description=?, vendor_id=?, allow_preorder=?, preorder_eta=?, tags=? WHERE id=?')
+    .run(String(b.name).slice(0, 120), String(b.category), money(b.price), money(b.cost_price), money(b.stock), String(b.sku || ''), String(b.description || ''), imageUrl, b.featured ? 1 : 0, b.active === false ? 0 : 1, String(b.seo_title || ''), String(b.seo_description || ''), Number(b.vendor_id || 0), b.allow_preorder ? 1 : 0, String(b.preorder_eta || ''), String(b.tags || ''), Number(req.params.id));
+  } catch (e) { return res.status(400).json({ error: 'পণ্য আপডেট হয়নি — আবার চেষ্টা করুন' }); }
   audit(req.admin.name, 'product_update', String(b.name));
-  res.json({ ok: true });
+  res.json({ ok: true, image_url: imageUrl });
+});
+// Product picture upload: jpg/png/webp, max 5MB, stored under public/uploads/.
+// Requires admin write auth (viewer blocked). Accepts multipart form field "image".
+const imageUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => cb(null, UPLOADS_DIR),
+    filename: (req, file, cb) => {
+      const ext = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp' }[file.mimetype] || '.jpg';
+      cb(null, 'product-' + Number(req.params.id) + '-' + Date.now() + ext);
+    },
+  }),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (['image/jpeg', 'image/png', 'image/webp'].includes(file.mimetype)) return cb(null, true);
+    cb(new Error('শুধু JPG, PNG বা WebP ছবি আপলোড করা যাবে'));
+  },
+});
+app.post('/api/admin/products/:id/image', adminAuth, requireWrite, (req, res) => {
+  const pid = Number(req.params.id);
+  const prod = db.prepare('SELECT * FROM products WHERE id = ?').get(pid);
+  if (!prod) return res.status(404).json({ error: 'পণ্য পাওয়া যায়নি' });
+  imageUpload.single('image')(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.code === 'LIMIT_FILE_SIZE' ? 'ছবি ৫MB-এর বেশি হতে পারবে না' : (err.message || 'আপলোড হয়নি') });
+    if (!req.file) return res.status(400).json({ error: 'ছবির ফাইল দিন' });
+    const imageUrl = '/uploads/' + req.file.filename;
+    // Remove the previous locally-uploaded picture (best effort — never block).
+    if (prod.image_url && prod.image_url.startsWith('/uploads/')) {
+      try { fs.unlinkSync(path.join(__dirname, 'public', prod.image_url.replace(/^\/+/, ''))); } catch (_) {}
+    }
+    db.prepare('UPDATE products SET image_url = ? WHERE id = ?').run(imageUrl, pid);
+    audit(req.admin.name, 'product_image_upload', prod.name + ' -> ' + imageUrl);
+    res.json({ ok: true, image_url: imageUrl });
+  });
 });
 app.delete('/api/admin/products/:id', adminAuth, requireWrite, (req, res) => {
   const id = Number(req.params.id);
@@ -711,7 +774,7 @@ app.post('/api/admin/settings', adminAuth, requireWrite, (req, res) => {
     if (!/^\d{4,8}$/.test(String(b.new_pin))) return res.status(400).json({ error: 'PIN ৪–৮ সংখ্যার হতে হবে' });
     pinHash = sha256(String(b.new_pin));
   }
-  const fields = ['shop_name', 'whatsapp_number', 'bkash_number', 'nagad_number', 'announcement', 'about_text', 'delivery_info', 'return_policy', 'business_email', 'maps_url', 'ga4_id', 'pixel_id', 'gsc_code', 'support_package', 'support_until', 'promo_code', 'flash_name', 'flash_ends_at', 'steadfast_api_key', 'steadfast_secret', 'sms_api_key', 'bkash_username', 'nagad_username', 'seo_title', 'seo_description', 'pickup_address', 'hotline'];
+  const fields = ['shop_name', 'whatsapp_number', 'bkash_number', 'nagad_number', 'announcement', 'about_text', 'delivery_info', 'return_policy', 'business_email', 'maps_url', 'ga4_id', 'pixel_id', 'gsc_code', 'support_package', 'support_until', 'promo_code', 'flash_name', 'flash_ends_at', 'steadfast_api_key', 'steadfast_secret', 'sms_api_key', 'bkash_username', 'nagad_username', 'seo_title', 'seo_description', 'pickup_address', 'hotline', 'hero_image_url'];
   const vals = {};
   // API keys: the admin form sends empty fields when the key is unchanged — an empty
   // string must NEVER wipe a saved key. Only a non-empty value overwrites it.
@@ -724,8 +787,8 @@ app.post('/api/admin/settings', adminAuth, requireWrite, (req, res) => {
   const numOrCur = (v, curV) => (v === undefined || v === '' || v === null) ? curV : money(v);
   if (vals.ga4_id && !/^G-[A-Z0-9]{4,}$/.test(vals.ga4_id)) return res.status(400).json({ error: 'GA4 ID ভুল ফরম্যাট (যেমন G-ABC1234)' });
   if (vals.pixel_id && !/^\d{6,}$/.test(vals.pixel_id)) return res.status(400).json({ error: 'Facebook Pixel ID শুধু সংখ্যা হতে হবে' });
-  db.prepare('UPDATE settings SET shop_name=?, whatsapp_number=?, bkash_number=?, nagad_number=?, delivery_inside=?, delivery_outside=?, free_delivery_threshold=?, announcement=?, about_text=?, delivery_info=?, return_policy=?, pin_hash=?, business_email=?, maps_url=?, ga4_id=?, pixel_id=?, gsc_code=?, support_package=?, support_until=?, promo_code=?, flash_name=?, flash_percent=?, flash_ends_at=?, gift_wrap_fee=?, loyalty_enabled=?, combo_enabled=?, combo_buy=?, combo_free=?, preorder_enabled=?, steadfast_api_key=?, steadfast_secret=?, sms_api_key=?, bkash_username=?, nagad_username=?, seo_title=?, seo_description=?, pickup_address=?, hotline=? WHERE id=1')
-    .run(vals.shop_name.slice(0, 120), vals.whatsapp_number, vals.bkash_number, vals.nagad_number, numOrCur(b.delivery_inside, cur.delivery_inside), numOrCur(b.delivery_outside, cur.delivery_outside), numOrCur(b.free_delivery_threshold, cur.free_delivery_threshold), vals.announcement, vals.about_text, vals.delivery_info, vals.return_policy, pinHash, vals.business_email, vals.maps_url, vals.ga4_id, vals.pixel_id, vals.gsc_code, vals.support_package, vals.support_until, vals.promo_code, vals.flash_name, numOrCur(b.flash_percent, cur.flash_percent), vals.flash_ends_at, numOrCur(b.gift_wrap_fee, cur.gift_wrap_fee), b.loyalty_enabled === undefined ? cur.loyalty_enabled : (b.loyalty_enabled ? 1 : 0), b.combo_enabled === undefined ? cur.combo_enabled : (b.combo_enabled ? 1 : 0), numOrCur(b.combo_buy, cur.combo_buy), numOrCur(b.combo_free, cur.combo_free), b.preorder_enabled === undefined ? cur.preorder_enabled : (b.preorder_enabled ? 1 : 0), vals.steadfast_api_key, vals.steadfast_secret, vals.sms_api_key, vals.bkash_username, vals.nagad_username, vals.seo_title, vals.seo_description, vals.pickup_address, vals.hotline);
+  db.prepare('UPDATE settings SET shop_name=?, whatsapp_number=?, bkash_number=?, nagad_number=?, delivery_inside=?, delivery_outside=?, free_delivery_threshold=?, announcement=?, about_text=?, delivery_info=?, return_policy=?, pin_hash=?, business_email=?, maps_url=?, ga4_id=?, pixel_id=?, gsc_code=?, support_package=?, support_until=?, promo_code=?, flash_name=?, flash_percent=?, flash_ends_at=?, gift_wrap_fee=?, loyalty_enabled=?, combo_enabled=?, combo_buy=?, combo_free=?, preorder_enabled=?, steadfast_api_key=?, steadfast_secret=?, sms_api_key=?, bkash_username=?, nagad_username=?, seo_title=?, seo_description=?, pickup_address=?, hotline=?, hero_image_url=? WHERE id=1')
+    .run(vals.shop_name.slice(0, 120), vals.whatsapp_number, vals.bkash_number, vals.nagad_number, numOrCur(b.delivery_inside, cur.delivery_inside), numOrCur(b.delivery_outside, cur.delivery_outside), numOrCur(b.free_delivery_threshold, cur.free_delivery_threshold), vals.announcement, vals.about_text, vals.delivery_info, vals.return_policy, pinHash, vals.business_email, vals.maps_url, vals.ga4_id, vals.pixel_id, vals.gsc_code, vals.support_package, vals.support_until, vals.promo_code, vals.flash_name, numOrCur(b.flash_percent, cur.flash_percent), vals.flash_ends_at, numOrCur(b.gift_wrap_fee, cur.gift_wrap_fee), b.loyalty_enabled === undefined ? cur.loyalty_enabled : (b.loyalty_enabled ? 1 : 0), b.combo_enabled === undefined ? cur.combo_enabled : (b.combo_enabled ? 1 : 0), numOrCur(b.combo_buy, cur.combo_buy), numOrCur(b.combo_free, cur.combo_free), b.preorder_enabled === undefined ? cur.preorder_enabled : (b.preorder_enabled ? 1 : 0), vals.steadfast_api_key, vals.steadfast_secret, vals.sms_api_key, vals.bkash_username, vals.nagad_username, vals.seo_title, vals.seo_description, vals.pickup_address, vals.hotline, (validImageUrl(vals.hero_image_url) === null ? cur.hero_image_url : (vals.hero_image_url || '')));
   audit(req.admin.name, 'settings_update', 'Store settings saved');
   res.json({ ok: true });
 });
@@ -736,7 +799,8 @@ app.post('/api/admin/products/import', adminAuth, requireWrite, (req, res) => {
   let added = 0;
   for (const r of rows) {
     if (!r.name || !(Number(r.price) > 0)) continue;
-    db.prepare('INSERT INTO products (name, category, price, cost_price, stock, sku, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').run(String(r.name).slice(0, 120), String(r.category || 'শাড়ি'), money(r.price), money(r.cost_price), money(r.stock), String(r.sku || ''), String(r.description || ''), nowIso());
+    const imageUrl = validImageUrl(r.image_url);
+    db.prepare('INSERT INTO products (name, category, price, cost_price, stock, sku, description, image_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(String(r.name).slice(0, 120), String(r.category || 'শাড়ি'), money(r.price), money(r.cost_price), money(r.stock), String(r.sku || ''), String(r.description || ''), imageUrl === null ? '' : imageUrl, nowIso());
     added++;
   }
   audit(req.admin.name, 'product_import', added + ' products imported');

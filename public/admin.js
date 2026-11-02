@@ -138,7 +138,10 @@ function render() {
       '<div class="row"><input id="npPrice" type="number" placeholder="দাম ৳ *"><input id="npCost" type="number" placeholder="কেনা দাম ৳"><input id="npStock" type="number" placeholder="স্টক"></div>' +
       '<div class="row"><input id="npSku" placeholder="SKU"><input id="npVendor" type="number" placeholder="ভেন্ডর ID (ঐচ্ছিক)"></div>' +
       '<div class="row"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="npPre" style="width:auto"> প্রি-অর্ডার চালু</label><input id="npEta" placeholder="প্রি-অর্ডার ETA (যেমন ৭ দিন)"></div>' +
-      '<input id="npDesc" placeholder="বিবরণ"><p><button class="btn" id="pSaveBtn" onclick="saveProduct()">পণ্য যোগ করুন</button> <button class="btn ghost" id="pCancelEdit" style="display:none" onclick="cancelEditProduct()">নতুন পণ্য</button> <button class="btn ghost" onclick="importProducts()">CSV থেকে ইমপোর্ট করুন</button></p><p class="small">CSV ফরম্যাট: নাম, ক্যাটাগরি, দাম, কেনা দাম, স্টক, SKU, বিবরণ (প্রথম লাইনে হেডার থাকতে পারে)।</p><div id="pErr"></div>' +
+      '<input id="npDesc" placeholder="বিবরণ">' +
+      '<label>পণ্যের ছবি</label><div class="row"><input id="npImg" placeholder="ছবির লিংক (URL) — যেমন https://.../shari.jpg" oninput="previewProductImage()"><input type="file" id="npImgFile" accept="image/jpeg,image/png,image/webp"></div>' +
+      '<p><img id="npImgPrev" style="display:none;max-width:160px;max-height:120px;object-fit:cover;border-radius:6px;border:1px solid #e5ddd3"> <button class="btn ghost small" id="npImgRemove" style="display:none" onclick="removeProductImage()">ছবি সরান</button></p><p class="small">ছবি দুইভাবে দেওয়া যায়: লিংক লিখুন, অথবা ফাইল বেছে নিন — "আপডেট/যোগ করুন"-এ চাপলেই আপলোড হবে (JPG/PNG/WebP, সর্বোচ্চ ৫MB)। ফ্রি হোস্টিংয়ে আপলোড করা ছবি সার্ভার রিস্টার্টে মুছে যেতে পারে — লিংক দেওয়া ছবি মুছবে না।</p>' +
+      '<p><button class="btn" id="pSaveBtn" onclick="saveProduct()">পণ্য যোগ করুন</button> <button class="btn ghost" id="pCancelEdit" style="display:none" onclick="cancelEditProduct()">নতুন পণ্য</button> <button class="btn ghost" onclick="importProducts()">CSV থেকে ইমপোর্ট করুন</button></p><p class="small">CSV ফরম্যাট: নাম, ক্যাটাগরি, দাম, কেনা দাম, স্টক, SKU, বিবরণ (প্রথম লাইনে হেডার থাকতে পারে)।</p><div id="pErr"></div>' +
       '<input placeholder="পণ্য খুঁজুন…" oninput="renderProducts(this.value)"><div id="pList"></div>';
     renderProducts('');
   }
@@ -247,6 +250,8 @@ function render() {
       '<div class="row"><div><label>ঢাকার ভিতরে ডেলিভারি ৳</label><input id="sDi" type="number" value="' + s.delivery_inside + '"></div><div><label>ঢাকার বাইরে ৳</label><input id="sDo" type="number" value="' + s.delivery_outside + '"></div><div><label>ফ্রি ডেলিভারি সীমা ৳</label><input id="sFd" type="number" value="' + s.free_delivery_threshold + '"></div></div>' +
       '<div class="row"><div><label>গিফট র‍্যাপ ফি ৳</label><input id="sGift" type="number" value="' + (s.gift_wrap_fee ?? 50) + '"></div><div><label>প্রোমো কুপন কোড</label><input id="sPromo" value="' + esc(s.promo_code || 'WELCOME10') + '"></div><div><label>সাপোর্ট প্যাকেজ</label><input id="sSup" value="' + esc(s.support_package || '') + '"></div></div>' +
       '<label>ঘোষণা বার</label><input id="sAnn" value="' + esc(s.announcement) + '">' +
+      '<label>হিরো ছবির লিংক (URL) — খালি রাখলে হিরো ছবি দেখাবে না, লিংক বসালে দোকানের উপরে ছবি আসবে</label><input id="sHeroImg" placeholder="https://.../shop.jpg" value="' + esc(s.hero_image_url || '') + '">' +
+      (s.hero_image_url ? '<p><img src="' + esc(s.hero_image_url) + '" style="max-width:280px;max-height:160px;object-fit:cover;border-radius:6px"> <button class="btn ghost small" onclick="document.getElementById(\'sHeroImg\').value=\'\';saveSettings()">হিরো ছবি সরান</button></p>' : '') +
       '<label>About</label><textarea id="sAbout">' + esc(s.about_text) + '</textarea>' +
       '<label>ডেলিভারি তথ্য</label><textarea id="sDel">' + esc(s.delivery_info) + '</textarea>' +
       '<label>রিটার্ন নীতি</label><textarea id="sRet">' + esc(s.return_policy) + '</textarea>' +
@@ -281,27 +286,60 @@ function renderOrders(q) {
 function renderProducts(q) {
   const list = DATA.products.filter(p => !q || (p.name + p.sku + p.category).toLowerCase().includes(q.toLowerCase()));
   $('#pList').innerHTML = '<table><tr><th>পণ্য</th><th>দাম</th><th>কেনা দাম</th><th>স্টক</th><th>বিক্রি</th><th></th></tr>' +
-    list.map(p => '<tr><td>' + esc(p.name) + '<br><small>' + p.sku + ' · ' + p.category + '</small></td><td>৳' + p.price + '</td><td>৳' + (p.cost_price || 0) + '</td><td>' + p.stock + '</td><td>' + p.soldCount + '</td><td><button class="btn ghost small" onclick="editProduct(' + p.id + ')">এডিট</button> <button class="btn ghost small" onclick="delProduct(' + p.id + ')">মুছুন</button></td></tr>').join('') + '</table>';
+    list.map(p => '<tr><td>' + (p.image_url ? '<img class="pthumb" src="' + esc(p.image_url) + '" alt=""> ' : '') + esc(p.name) + '<br><small>' + p.sku + ' · ' + p.category + '</small></td><td>৳' + p.price + '</td><td>৳' + (p.cost_price || 0) + '</td><td>' + p.stock + '</td><td>' + p.soldCount + '</td><td><button class="btn ghost small" onclick="editProduct(' + p.id + ')">এডিট</button> <button class="btn ghost small" onclick="delProduct(' + p.id + ')">মুছুন</button></td></tr>').join('') + '</table>';
+}
+async function uploadProductImage(id, file) {
+  const fd = new FormData(); fd.append('image', file);
+  const r = await fetch('/api/admin/products/' + id + '/image', { method: 'POST', headers: { 'x-admin-token': TOKEN }, body: fd });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || 'ছবি আপলোড হয়নি');
+  return d.image_url;
+}
+function previewProductImage() {
+  const url = ($('#npImg') || {}).value || '';
+  const img = $('#npImgPrev'), btn = $('#npImgRemove');
+  if (url) { img.src = url; img.style.display = ''; if (btn) btn.style.display = ''; }
+  else { if (img) img.style.display = 'none'; if (btn) btn.style.display = 'none'; }
+}
+function removeProductImage() {
+  $('#npImg').value = ''; const f = $('#npImgFile'); if (f) f.value = '';
+  previewProductImage();
 }
 async function saveProduct() {
   const id = window._editPid || 0;
-  const body = { name: $('#npName').value, category: $('#npCat').value, price: $('#npPrice').value, cost_price: $('#npCost').value, stock: $('#npStock').value, sku: $('#npSku').value, vendor_id: $('#npVendor').value, allow_preorder: $('#npPre').checked, preorder_eta: $('#npEta').value, description: $('#npDesc').value };
+  const file = ($('#npImgFile') || {}).files ? $('#npImgFile').files[0] : null;
+  const body = { name: $('#npName').value, category: $('#npCat').value, price: $('#npPrice').value, cost_price: $('#npCost').value, stock: $('#npStock').value, sku: $('#npSku').value, vendor_id: $('#npVendor').value, allow_preorder: $('#npPre').checked, preorder_eta: $('#npEta').value, description: $('#npDesc').value, image_url: $('#npImg').value.trim() };
   try {
-    if (id) await api('/api/admin/products/' + id, { method: 'PUT', body: JSON.stringify(body) });
-    else await api('/api/admin/products', { method: 'POST', body: JSON.stringify(body) });
+    let pid = id;
+    if (pid) {
+      if (file) body.image_url = await uploadProductImage(pid, file);
+      await api('/api/admin/products/' + pid, { method: 'PUT', body: JSON.stringify(body) });
+    } else {
+      const d = await api('/api/admin/products', { method: 'POST', body: JSON.stringify(body) });
+      pid = d.id;
+      if (file) await uploadProductImage(pid, file);
+    }
     window._editPid = 0; await loadData();
+    toastAdmin(id ? 'পণ্য আপডেট হয়েছে' : 'পণ্য যোগ হয়েছে');
   } catch (e) { $('#pErr').innerHTML = '<div class="err">' + e.message + '</div>'; }
 }
 function editProduct(id) {
   const p = DATA.products.find(x => x.id === id); if (!p) return;
   window._editPid = id;
   $('#npName').value = p.name; $('#npCat').value = p.category; $('#npPrice').value = p.price; $('#npCost').value = p.cost_price || ''; $('#npStock').value = p.stock; $('#npSku').value = p.sku || ''; $('#npVendor').value = p.vendor_id || ''; $('#npPre').checked = !!p.allow_preorder; $('#npEta').value = p.preorder_eta || ''; $('#npDesc').value = p.description || '';
+  $('#npImg').value = p.image_url || ''; const f = $('#npImgFile'); if (f) f.value = '';
+  previewProductImage();
   $('#pSaveBtn').textContent = 'আপডেট করুন'; $('#pCancelEdit').style.display = '';
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  // The form sits above the product list — bring it into view and say so,
+  // otherwise clicking এডিট looks like nothing happened.
+  $('#pSaveBtn').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  toastAdmin('এডিট করছেন: ' + p.name + ' — উপরে ফর্মে বদলে "আপডেট করুন" চাপুন');
 }
 function cancelEditProduct() {
   window._editPid = 0;
-  ['npName', 'npCat', 'npPrice', 'npCost', 'npStock', 'npSku', 'npVendor', 'npEta', 'npDesc'].forEach(i => { document.getElementById(i).value = ''; });
+  ['npName', 'npCat', 'npPrice', 'npCost', 'npStock', 'npSku', 'npVendor', 'npEta', 'npDesc', 'npImg'].forEach(i => { document.getElementById(i).value = ''; });
+  const f = $('#npImgFile'); if (f) f.value = '';
+  previewProductImage();
   $('#npPre').checked = false; $('#pSaveBtn').textContent = 'পণ্য যোগ করুন'; $('#pCancelEdit').style.display = 'none';
 }
 function parseCsv(text) {
@@ -412,7 +450,7 @@ async function saveSettings() {
       business_email: $('#sEmail').value, hotline: $('#sHot').value, maps_url: $('#sMaps').value,
       delivery_inside: $('#sDi').value, delivery_outside: $('#sDo').value, free_delivery_threshold: $('#sFd').value,
       gift_wrap_fee: $('#sGift').value, promo_code: $('#sPromo').value, support_package: $('#sSup').value,
-      announcement: $('#sAnn').value, about_text: $('#sAbout').value, delivery_info: $('#sDel').value, return_policy: $('#sRet').value,
+      announcement: $('#sAnn').value, hero_image_url: $('#sHeroImg').value, about_text: $('#sAbout').value, delivery_info: $('#sDel').value, return_policy: $('#sRet').value,
       flash_name: $('#sFlashName').value, flash_percent: $('#sFlashPct').value, flash_ends_at: $('#sFlashEnd').value,
       ga4_id: $('#sGa').value, pixel_id: $('#sPx').value, gsc_code: $('#sGsc').value,
       steadfast_api_key: $('#sSfK').value, steadfast_secret: $('#sSfS').value, sms_api_key: $('#sSmsK').value,

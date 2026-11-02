@@ -43,9 +43,13 @@ function badges(p) {
   if (SETTINGS.flash_percent && SETTINGS.flash_name) out.push('<span class="badge sale">-' + SETTINGS.flash_percent + '%</span>');
   return out.slice(0, 2).join('');
 }
+function productVisual(p, big) {
+  if (p.image_url) return '<img class="pimg' + (big ? ' big' : '') + '" src="' + esc(p.image_url) + '" alt="' + esc(p.name) + '" loading="lazy">';
+  return '<div class="pvisual' + (big ? ' big' : '') + '" style="background:' + colourFor(p) + '">' + esc(p.category) + '</div>';
+}
 function cardHtml(p) {
   const price = SETTINGS.flash_percent ? Math.round(p.price * (100 - SETTINGS.flash_percent) / 100) : p.price;
-  return '<div class="pcard"><div class="pvisual" style="background:' + colourFor(p) + '">' + esc(p.category) + '</div>' +
+  return '<div class="pcard">' + productVisual(p) +
     '<div class="pbody"><h3>' + esc(p.name) + '</h3><div>' + badges(p) + '<span class="badge">' + esc(p.category) + '</span></div>' +
     '<div class="pmeta">রেটিং ' + p.avgRating + ' (' + p.reviewCount + ') · বিক্রি ' + p.soldCount + '</div>' +
     '<div><span class="price">৳' + price.toLocaleString() + '</span>' + (price !== p.price ? '<span class="old">৳' + p.price.toLocaleString() + '</span>' : '') + '</div>' +
@@ -75,6 +79,8 @@ async function init() {
     document.head.appendChild(s);
   }
   $('#ann').textContent = SETTINGS.announcement || '';
+  const heroImg = document.getElementById('heroImg');
+  if (SETTINGS.hero_image_url) { heroImg.src = SETTINGS.hero_image_url; heroImg.style.display = ''; } else { heroImg.style.display = 'none'; }
   $('#langBtn').textContent = LANG === 'bn' ? 'English' : 'বাংলায় দেখুন';
   document.querySelector('[data-i18n="heroTitle"]').textContent = t('heroTitle');
   document.querySelector('[data-i18n="heroSub"]').textContent = t('heroSub');
@@ -173,7 +179,7 @@ async function showDetail(id) {
   const price = SETTINGS.flash_percent ? Math.round(p.price * (100 - SETTINGS.flash_percent) / 100) : p.price;
   const related = ALL.filter(x => x.category === p.category && x.id !== p.id).slice(0, 3);
   openModal('<h3>' + esc(p.name) + '</h3>' +
-    '<div class="pvisual" style="background:' + colourFor(p) + ';height:120px;border-radius:6px">' + esc(p.category) + '</div>' +
+    productVisual(p, true) +
     '<p>' + esc(p.description) + '</p><p><span class="price">৳' + price.toLocaleString() + '</span>' + (price !== p.price ? '<span class="old">৳' + p.price.toLocaleString() + '</span>' : '') + '</p>' +
     '<p class="pmeta">ক্যাটাগরি: ' + esc(p.category) + ' · SKU: ' + esc(p.sku) + ' · স্টক: ' + p.stock + (p.allow_preorder ? ' · প্রি-অর্ডার সম্ভব' + (p.preorder_eta ? ' (' + esc(p.preorder_eta) + ')' : '') : '') + '</p>' +
     (p.images && p.images.length ? '<p class="pmeta">ছবি: ' + p.images.map(i => esc(i.label)).join(', ') + '</p>' : '') +

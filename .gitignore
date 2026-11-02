@@ -5,3 +5,7 @@ node_modules/
 *.sqlite3
 *.log
 .DS_Store
+# Uploaded product pictures are user data, not code (and on Render free tier
+# they vanish on restart anyway) — never commit them.
+public/uploads/*
+!public/uploads/.gitkeep
