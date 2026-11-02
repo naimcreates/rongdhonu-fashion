@@ -1,47 +1,70 @@
-# Rongdhonu Fashion — Demo Boutique Storefront + Admin
+# Rongdhonu Fashion — রঙধনু ফ্যাশন (v2.0)
 
-A runnable standalone version of Naim's website-building service demo:
-a Bangladeshi boutique storefront ("রঙধনু ফ্যাশন") with cart, checkout,
-coupons, order tracking, reviews, wishlist and variants — plus a PIN-protected
-admin panel with dashboard, products, categories, orders, customers, coupons,
-courier/Steadfast, payments ledger and settings.
+A complete demo boutique storefront + admin for a Bangladeshi online fashion shop.
+Node.js (Express, only dependency) + SQLite via built-in `node:sqlite`. No build step.
 
-Stack: **Node.js (Express) + SQLite** (built-in `node:sqlite`, Node 22+).
-No build step, no frontend framework. Data lives in `rongdhonu.db`
-(created on first run; it is gitignored — never commit it).
-
-## Run locally
+## Run
 
 ```bash
 npm install
-npm start
+npm start          # http://localhost:3000
 ```
 
-Open http://localhost:3000
-
 - Storefront: http://localhost:3000
-- Admin: http://localhost:3000/admin — demo PIN: **1234**
-  (change it in Admin → Settings. The PIN is stored only as a SHA-256 hash.)
+- Admin: http://localhost:3000/admin — demo PIN **1234** (change in Settings before real use)
+- Staff viewer demo PIN **7777** (read-only — writes are blocked server-side)
 
-Demo data: 7 products, categories (শাড়ি / থ্রি-পিস / কুর্তি), coupons
-`WELCOME10` (10% off, min ৳1000) and `FLASH20` (20% off, min ৳2000).
+Requires Node 22+. The database file is created automatically on first run
+(`rongdhonu.db`, git-ignored). The shop ships with 7 demo products, 3 categories
+(শাড়ি / থ্রি-পিস / কুর্তি), SKUs, SEO meta, shipping zones and 6 FAQs seeded.
 
-Delivery: ৳60 inside Dhaka, ৳120 outside, free over ৳1000.
-Payment: COD + bKash/Nagad (manual — see below).
+## Storefront (v2)
 
-## What is included
+- Announcement bar, hero with delivery info grid (৳60 inside Dhaka / ৳120 outside,
+  free delivery over ৳1000), category showcase, featured / new arrivals / discounted
+  sections, flash sale with countdown, product gallery, ratings + reviews, related
+  products, recently viewed, compare (up to 3), wishlist, sorting + price filter,
+  search with suggestions, About / Delivery / Return policy sections with real text
+  and figures, 6 FAQs, newsletter, big footer with business email + maps link.
+- Bangla/English language switch for interface strings.
+- Promo popup once per session (from the real promo coupon in Settings).
+- Checkout: district + thana, COD / bKash / Nagad (manual — admin confirms payment),
+  delivery slot, gift wrap (৳50) + message, loyalty redeem, referral code.
+- Coupons: `WELCOME10` (10% off, min ৳1000), `FLASH20` (20% off, min ৳2000).
+- Combo offer: buy 2 get 1 free (cheapest unit free). Loyalty: 1 point per ৳100
+  spent, 1 point = ৳1, redeem up to 50%. Referral: 50 points on registration,
+  100 points on the referrer's side when the referred customer places an order.
+- Pre-order products with an ETA. Order tracking by order number + phone.
+- Customer account: register / login with phone + PIN (PIN stored as a hash only),
+  multiple addresses, My Orders, reorder.
+- SEO meta, Open Graph, JSON-LD Store schema, sitemap.xml, robots.txt.
+  PWA manifest (install button only — no service worker / offline mode).
 
-- Storefront: category filter, search (name/SKU/category), sorting, product
-  detail with size/color variants, reviews, wishlist, cart, checkout with
-  64-district + thana, gift wrap, coupons, free-delivery progress, WhatsApp
-  order link, order tracking by order number + phone.
-- Admin: dashboard with real totals, product CRUD (+ cost price), category
-  CRUD, order status flow + bulk status + internal notes, customer list with
-  loyalty points, coupon CRUD, courier tab (consignment ID/status/fee,
-  Steadfast bulk CSV export), editable Payments ledger ("Payment Khata"),
-  settings (shop name, WhatsApp/bKash/Nagad numbers, delivery charges, PIN).
-- Exports: Orders CSV, Products CSV, Steadfast bulk CSV, full shop JSON
-  backup (Admin → Dashboard) — backups never contain PIN hashes or keys.
+## Admin (22 modules, grouped sidebar)
+
+Overview: Dashboard & analytics, Reports, Launch checklist.
+Sales: Orders (bulk actions, internal notes, status flow), Customers, Payments
+editable ledger ("Payment Khata"), Returns & exchanges (incl. customer self-service
+requests), Coupons.
+Catalog: Products, Categories & subcategories, Collections, Variants, Vendors.
+Inventory & delivery: Centralised inventory + stock-movement ledger, Courier &
+shipping (Steadfast bulk CSV, Pathao/RedX CSV, consignment ID / status / fee,
+printable parcel label), Shipping zones.
+Marketing & content: Campaigns, Banners, CMS pages, FAQs, Testimonials,
+Review moderation, Product Q&A, Subscribers.
+Management: Expenses ("Lav o Khoroch" — gross/net profit), Staff & roles
+(Owner / Manager / Viewer — Viewer writes blocked server-side, staff + PIN change
+Owner-only), Settings, Notifications, SMS queue, Audit log.
+
+The Launch checklist ($200 pack) is a 14-point check computed from real
+settings and data (domain, hosting, business email, GA4, Search Console, Pixel,
+About / Delivery / Return texts, ≥10 products, real WhatsApp number, PIN changed,
+gateway, courier key, SMS, support package). One-click "fill gaps" fills empty
+About / Delivery / Return texts, categories, shipping zones, SKUs and SEO meta
+without overwriting anything that already exists.
+
+Exports: Orders CSV, Steadfast bulk CSV, Pathao/RedX CSV, Products CSV,
+full-shop JSON backup. Product CSV import (1–200 rows).
 
 ## Deploy on Render (free tier)
 
@@ -56,33 +79,42 @@ Payment: COD + bKash/Nagad (manual — see below).
    a Render Disk (paid) or a managed database, and set `DB_PATH` to that
    location. For a demo, the free tier is fine.
 
-## Connect a custom domain
+## Order flow (invariants)
 
-1. Buy a domain (e.g. Namecheap/GoDaddy, ~$10–12/year).
-2. In Render → your service → Settings → Custom Domain → add your domain.
-3. At your domain registrar, add the DNS record Render shows you
-   (usually a CNAME to `<name>.onrender.com`).
-4. Wait a few minutes — Render issues the SSL certificate automatically
-   (https). Do not share your registrar password with anyone.
+- Stock decreases on order (product + variant), restores on cancel.
+- Loyalty earned = floor(total / 100) when loyalty is enabled.
+- Free delivery when the after-discount subtotal reaches the threshold.
+- Returns marked "received" restock the product exactly once.
 
-## What still needs real keys / accounts (not included)
+## Honest limits (v2.0)
 
-- **Live bKash/Nagad gateway** — needs a merchant account + API keys and
-  merchant approval. This demo records the payment method and the shop's
-  bKash/Nagad numbers; it never charges a real payment.
-- **Steadfast live API auto-booking** — needs a Steadfast API key/secret
-  (Settings has fields for them in the Muse version; here use the
-  Steadfast bulk CSV export and upload it in the Steadfast panel).
-- **SMS gateway** — needs a paid SMS provider for OTP / auto-SMS.
-  Customer login in the Muse version uses PIN, not OTP, for this reason.
-- **Domain + hosting** — your own accounts (see above).
-- **PostgreSQL** — this standalone demo uses SQLite on purpose (zero setup).
-  For a production shop with many users, move the same schema to PostgreSQL.
+- **Payments are manual.** bKash / Nagad appear as options, but the customer sends
+  money by hand and the admin confirms it. Live charging needs a real merchant
+  account, API key and approval — nothing is auto-charged.
+- **No live courier booking.** Steadfast / Pathao / RedX export as CSV files that
+  are uploaded to the courier's panel. Live API auto-booking needs a courier
+  API key in Settings.
+- **No auto-SMS.** The SMS queue lists messages to send by hand; auto-send needs
+  an SMS gateway key.
+- **SQLite, not PostgreSQL.** The database is a local SQLite file. On a free
+  hosting tier the file can reset — keep a JSON backup (Dashboard → Download).
+- **No deploy, domain, or real seller test yet.** No service worker / offline PWA.
+
+## API surface (highlights)
+
+Public: `/api/storefront`, `/api/products`, `/api/products/:id`, `/api/reviews`,
+`/api/questions`, `/api/subscribe`, `/api/coupons/preview`, `/api/orders`,
+`/api/track`, `/api/my-orders`, `/api/returns/request`, `/api/customers/*`,
+`/sitemap.xml`, `/robots.txt`, `/health`.
+Admin (header `x-admin-token`, 12h session): `/api/admin/login`, `/api/admin/data`,
+CRUD under `/api/admin/<resource>`, order status / bulk-status / note / courier /
+label, stock adjust, payments, returns, staff (Owner only), settings, fill-gaps,
+launch-checklist, exports, backup, product import.
 
 ## Security notes
 
-- Change the demo admin PIN (1234) before any real use.
-- Never commit `.env`, `*.db`, or any API key/secret. `.gitignore` already
-  covers `node_modules/`, `.env`, `*.db` and `*.sqlite`.
-- This is demo code for Naim's website-building service, not a certified
-  production system. Review it before putting real customer money through it.
+- Admin PIN and customer PINs are stored only as SHA-256 hashes.
+- API keys (Steadfast, SMS) are stored in the local DB and never returned by the API.
+- The demo PIN 1234 is documented here on purpose — change it in Settings before
+  any real use, and never put a real API key in the repo. `.env` and `*.db` files
+  are git-ignored.

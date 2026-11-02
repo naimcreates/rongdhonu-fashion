@@ -6,13 +6,18 @@
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-<header class="top"><h1>🌈 রঙধনু ফ্যাশন — অ্যাডমিন</h1><span class="sp"></span>
+<header class="top"><a class="brand" href="/admin">রঙধনু <span>ফ্যাশন — অ্যাডমিন</span></a><span class="sp"></span>
+<span class="small" id="adminWho"></span>
 <a class="btn ghost small" href="/">দোকান দেখুন</a>
 <button class="btn ghost small" id="logoutBtn" style="display:none" onclick="logout()">লগআউট</button></header>
-<div class="wrap" id="app">
+<div class="admin-shell" id="shell" style="display:none">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="admin-main" id="app"></main>
+</div>
+<div class="wrap" id="loginWrap">
   <div class="card" style="max-width:380px;margin:40px auto">
     <h2>অ্যাডমিন লগইন</h2>
-    <p style="color:#666;font-size:14px">ডেমো PIN: <b>1234</b> — Settings থেকে বদলে নিন।</p>
+    <p class="small">ডেমো PIN: <b>1234</b> — Settings থেকে বদলে নিন। Viewer ডেমো PIN: 7777 (শুধু দেখতে পারবে)।</p>
     <label>PIN</label>
     <div class="row"><input id="pin" type="password" inputmode="numeric" placeholder="••••">
     <button class="btn ghost" onclick="const e=document.getElementById('pin');e.type=e.type==='password'?'text':'password'">দেখুন</button></div>

@@ -2,40 +2,108 @@
 <html lang="bn">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>রঙধনু ফ্যাশন — বুটিক</title>
-<meta name="description" content="রঙধনু ফ্যাশন — হাতে বাছাই করা শাড়ি, থ্রি-পিস ও কুর্তি। সারা দেশে ক্যাশ অন ডেলিভারি।">
+<title>রঙধনু ফ্যাশন — শাড়ি, থ্রি-পিস ও কুর্তি | সারা দেশে ক্যাশ অন ডেলিভারি</title>
+<meta name="description" content="রঙধনু ফ্যাশন — হাতে বাছাই করা শাড়ি, থ্রি-পিস ও কুর্তি। ঢাকায় ৳৬০, ঢাকার বাইরে ৳১২০ ডেলিভারি। ৳১,০০০+ অর্ডারে ফ্রি ডেলিভারি।">
+<meta property="og:title" content="রঙধনু ফ্যাশন — বুটিক">
+<meta property="og:description" content="হাতে বাছাই করা শাড়ি, থ্রি-পিস ও কুর্তি। সারা দেশে ক্যাশ অন ডেলিভারি।">
+<meta property="og:type" content="website">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"Store","name":"রঙধনু ফ্যাশন","description":"বাংলাদেশি বুটিক — শাড়ি, থ্রি-পিস ও কুর্তি"}</script>
 <link rel="stylesheet" href="/style.css">
+<link rel="manifest" href='data:application/manifest+json,{"name":"রঙধনু ফ্যাশন","short_name":"রঙধনু","display":"standalone","start_url":"/"}'>
 </head>
 <body>
 <div class="ann" id="ann"></div>
 <header class="top">
-  <h1>🌈 রঙধনু ফ্যাশন</h1><span class="sp"></span>
-  <button class="btn ghost small" onclick="showTrack()">অর্ডার ট্র্যাক করুন</button>
-  <button class="btn ghost small" onclick="showWishlist()">♥ পছন্দ <span id="wishCount"></span></button>
-  <button class="btn small" onclick="showCart()">🛒 কার্ট <span id="cartCount">0</span></button>
+  <a class="brand" href="/">রঙধনু <span>ফ্যাশন</span></a>
+  <a class="navlink" href="#products">পণ্য</a>
+  <a class="navlink" href="#categories">ক্যাটাগরি</a>
+  <a class="navlink" href="#about">আমাদের সম্পর্কে</a>
+  <a class="navlink" href="#faq">জিজ্ঞাসা</a>
+  <span class="sp"></span>
+  <button class="btn plain small" id="langBtn" onclick="toggleLang()">English</button>
+  <button class="btn ghost small" onclick="showAccount()">আমার অ্যাকাউন্ট</button>
+  <button class="btn ghost small" onclick="showTrack()">অর্ডার ট্র্যাক</button>
+  <button class="btn ghost small" onclick="showCompare()">তুলনা <span id="cmpCount"></span></button>
+  <button class="btn ghost small" onclick="showWishlist()">পছন্দ <span id="wishCount"></span></button>
+  <button class="btn small" onclick="showCart()">কার্ট <span id="cartCount">0</span></button>
   <a class="btn ghost small" href="/admin">অ্যাডমিন</a>
 </header>
 <div class="wrap">
-  <div class="hero">
-    <h2 style="margin:0">হাতে বাছাই করা শাড়ি, থ্রি-পিস ও কুর্তি</h2>
-    <p>সারা দেশে ক্যাশ অন ডেলিভারি। বিকাশ / নগদ / COD — সব পেমেন্টেই অর্ডার করা যায়।</p>
+  <div class="hero" id="hero">
+    <h2 data-i18n="heroTitle">হাতে বাছাই করা শাড়ি, থ্রি-পিস ও কুর্তি</h2>
+    <p data-i18n="heroSub">সারা দেশে ক্যাশ অন ডেলিভারি। বিকাশ / নগদ / COD — সব পেমেন্টেই অর্ডার করা যায়।</p>
     <div class="grid" id="heroGrid"></div>
+    <p class="small" id="heroNote" style="margin-top:10px"></p>
   </div>
-  <div class="toolbar">
-    <input id="q" placeholder="পণ্য, SKU বা ক্যাটাগরি খুঁজুন…" oninput="loadProducts()">
-    <select id="cat" onchange="loadProducts()"><option value="">সব ক্যাটাগরি</option></select>
-    <select id="sort" onchange="loadProducts()">
-      <option value="">সাজান: ডিফল্ট</option><option value="price-asc">দাম: কম → বেশি</option>
-      <option value="price-desc">দাম: বেশি → কম</option><option value="rating">রেটিং</option>
-    </select>
-  </div>
-  <div id="msg"></div>
-  <div class="products" id="products"></div>
-  <section id="about" style="margin-top:24px"></section>
+  <section class="section" id="flashSection" style="display:none">
+    <div class="section-head"><h2 id="flashTitle">ফ্ল্যাশ সেল</h2><span class="sp"></span><b id="flashTimer"></b></div>
+    <div class="products" id="flashProducts"></div>
+  </section>
+  <section class="section" id="categories">
+    <div class="section-head"><h2>ক্যাটাগরি</h2></div>
+    <div class="toolbar" id="catShowcase"></div>
+  </section>
+  <section class="section">
+    <div class="section-head"><h2>বিশেষ পছন্দ</h2><span class="sp"></span><span class="small">সবচেয়ে বেশি বিক্রি হওয়া পণ্য</span></div>
+    <div class="products" id="featuredProducts"></div>
+  </section>
+  <section class="section" id="products">
+    <div class="section-head"><h2>সব পণ্য</h2><span class="sp"></span><span class="small" id="resultCount"></span></div>
+    <div class="toolbar">
+      <input id="q" placeholder="পণ্য, SKU বা ক্যাটাগরি খুঁজুন…" oninput="onSearchInput()" autocomplete="off">
+      <select id="cat" onchange="loadProducts()"><option value="">সব ক্যাটাগরি</option></select>
+      <select id="vendor" onchange="loadProducts()"><option value="">সব বিক্রেতা</option></select>
+      <select id="sort" onchange="loadProducts()">
+        <option value="">সাজান: ডিফল্ট</option><option value="price-asc">দাম: কম → বেশি</option>
+        <option value="price-desc">দাম: বেশি → কম</option><option value="rating">রেটিং</option><option value="discount">বেশি বিক্রি</option>
+      </select>
+      <select id="priceRange" onchange="loadProducts()">
+        <option value="">সব দাম</option><option value="0-1500">৳১,৫০০ পর্যন্ত</option><option value="1500-3000">৳১,৫০০ – ৳৩,০০০</option><option value="3000-99999">৳৩,০০০+</option>
+      </select>
+    </div>
+    <div id="suggest" class="card" style="display:none"></div>
+    <div id="msg"></div>
+    <div class="products" id="productsGrid"></div>
+  </section>
+  <section class="section">
+    <div class="section-head"><h2>নতুন এসেছে</h2></div>
+    <div class="products" id="newProducts"></div>
+  </section>
+  <section class="section">
+    <div class="section-head"><h2>ছাড়ের পণ্য</h2></div>
+    <div class="products" id="discountProducts"></div>
+  </section>
+  <section class="section" id="recentSection" style="display:none">
+    <div class="section-head"><h2>সম্প্রতি দেখেছেন</h2></div>
+    <div class="products" id="recentProducts"></div>
+  </section>
+  <section class="section" id="about">
+    <div class="section-head"><h2>আমাদের সম্পর্কে</h2></div>
+    <div class="card" id="aboutCard"></div>
+  </section>
+  <section class="section">
+    <div class="section-head"><h2>ক্রেতাদের মতামত</h2></div>
+    <div class="card" id="testimonials"></div>
+  </section>
+  <section class="section" id="faq">
+    <div class="section-head"><h2>সচরাচর জিজ্ঞাসা</h2></div>
+    <div id="faqList"></div>
+  </section>
+  <section class="section">
+    <div class="card">
+      <h3>নিউজলেটার</h3>
+      <p class="small">নতুন পণ্য ও অফারের খবর পেতে আপনার মোবাইল বা ইমেইল দিন।</p>
+      <div class="row"><input id="subContact" placeholder="মোবাইল নম্বর বা ইমেইল"><button class="btn" onclick="subscribe()">সাবস্ক্রাইব করুন</button></div>
+      <div id="subMsg"></div>
+    </div>
+  </section>
 </div>
-<footer id="footer"></footer>
-
+<footer>
+  <div class="wrap" id="footerGrid"></div>
+  <p style="text-align:center;margin-top:18px" class="small">© রঙধনু ফ্যাশন — সারা দেশে ক্যাশ অন ডেলিভারি</p>
+</footer>
 <div class="modal" id="modal"><div class="box" id="modalBox"></div></div>
+<div id="toast"></div>
 <script src="/app.js"></script>
 </body>
 </html>
