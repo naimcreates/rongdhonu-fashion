@@ -17,7 +17,7 @@
 <div class="wrap" id="loginWrap">
   <div class="card" style="max-width:380px;margin:40px auto">
     <h2>অ্যাডমিন লগইন</h2>
-    <p class="small">ডেমো PIN: <b>1234</b> — Settings থেকে বদলে নিন। Viewer ডেমো PIN: 7777 (শুধু দেখতে পারবে)।</p>
+    <p class="small">অ্যাডমিন PIN দিয়ে লগইন করুন। PIN জানা না থাকলে দোকানের মালিকের কাছে জিজ্ঞাসা করুন। Viewer রোল শুধু দেখতে পারবে, কিছু বদলাতে পারবে না।</p>
     <label>PIN</label>
     <div class="row"><input id="pin" type="password" inputmode="numeric" placeholder="••••">
     <button class="btn ghost" onclick="const e=document.getElementById('pin');e.type=e.type==='password'?'text':'password'">দেখুন</button></div>
@@ -25,6 +25,7 @@
     <div id="err"></div>
   </div>
 </div>
+<div class="modal" id="modal"><div class="box" id="modalBox"></div></div>
 <script src="/admin.js"></script>
 </body>
 </html>

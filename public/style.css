@@ -118,4 +118,9 @@ tr:hover td{background:#fbf8f4}
   .sidebar{width:100%;flex:none;border-right:0;border-bottom:1px solid var(--line)}
   .hero h2{font-size:21px}
   .hero{padding:16px}
+  .admin-main #tab{overflow-x:auto}
+  .admin-main table{display:block;overflow-x:auto;white-space:nowrap}
+  .modal .box{max-height:88vh;overflow:auto}
+  .row{flex-wrap:wrap}
+  header.top{gap:6px;padding:8px 10px}
 }

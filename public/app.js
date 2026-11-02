@@ -37,7 +37,8 @@ function colourFor(p) { const m = { 'শাড়ি': '#7a1f2b', 'থ্রি-
 function badges(p) {
   const out = [];
   if (p.featured) out.push('<span class="badge best">বেস্ট সেলার</span>');
-  const isNew = p.id >= Math.max(...ALL.map(x => x.id)) - 1;
+  const maxId = ALL.length ? Math.max(...ALL.map(x => x.id)) : 0;
+  const isNew = maxId && p.id >= maxId - 1;
   if (isNew) out.push('<span class="badge new">নতুন</span>');
   if (SETTINGS.flash_percent && SETTINGS.flash_name) out.push('<span class="badge sale">-' + SETTINGS.flash_percent + '%</span>');
   return out.slice(0, 2).join('');
@@ -55,8 +56,24 @@ function cardHtml(p) {
     '<button class="btn plain small" onclick="showDetail(' + p.id + ')">' + t('details') + '</button></div></div></div>';
 }
 async function init() {
-  const r = await fetch('/api/storefront'); const d = await r.json();
-  SETTINGS = d.settings; ALL = d.products; CATS = d.categories; VENDORS = d.vendors || [];
+  try {
+    const r = await fetch('/api/storefront');
+    if (!r.ok) throw new Error('server ' + r.status);
+    const d = await r.json();
+    SETTINGS = d.settings; ALL = d.products; CATS = d.categories; VENDORS = d.vendors || [];
+  } catch (e) {
+    document.getElementById('productsGrid').innerHTML = '<div class="card"><h3>দোকান লোড হয়নি</h3><p>সার্ভার জেগে উঠছে বা সংযোগে সমস্যা হচ্ছে (ফ্রি হোস্টিং প্রথমবার খুলতে সময় নেয়)।</p><p><button class="btn" onclick="location.reload()">আবার চেষ্টা করুন</button></p></div>';
+    return;
+  }
+  // Analytics — only when the owner saved their own IDs in Settings.
+  if (SETTINGS.ga4_id) {
+    const s = document.createElement('script'); s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=' + encodeURIComponent(SETTINGS.ga4_id); document.head.appendChild(s);
+    window.dataLayer = window.dataLayer || []; window.gtag = function () { dataLayer.push(arguments); }; gtag('js', new Date()); gtag('config', SETTINGS.ga4_id);
+  }
+  if (SETTINGS.pixel_id) {
+    const s = document.createElement('script'); s.textContent = "!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','" + SETTINGS.pixel_id.replace(/[^0-9]/g, '') + "');fbq('track','PageView');";
+    document.head.appendChild(s);
+  }
   $('#ann').textContent = SETTINGS.announcement || '';
   $('#langBtn').textContent = LANG === 'bn' ? 'English' : 'বাংলায় দেখুন';
   document.querySelector('[data-i18n="heroTitle"]').textContent = t('heroTitle');
@@ -78,7 +95,7 @@ async function init() {
     $('#flashProducts').innerHTML = ALL.slice(0, 4).map(cardHtml).join('');
     if (SETTINGS.flash_ends_at) {
       const end = new Date(SETTINGS.flash_ends_at).getTime();
-      setInterval(() => { const ms = end - Date.now(); if (ms <= 0) { $('#flashTimer').textContent = 'শেষ'; return; } const h = Math.floor(ms / 3600000), m = Math.floor(ms % 3600000 / 60000), s = Math.floor(ms % 60000 / 1000); $('#flashTimer').textContent = h + 'ঘ ' + m + 'মি ' + s + 'সে'; }, 1000);
+      const timer = setInterval(() => { const ms = end - Date.now(); if (ms <= 0) { $('#flashTimer').textContent = 'শেষ'; clearInterval(timer); location.reload(); return; } const h = Math.floor(ms / 3600000), m = Math.floor(ms % 3600000 / 60000), s = Math.floor(ms % 60000 / 1000); $('#flashTimer').textContent = h + 'ঘ ' + m + 'মি ' + s + 'সে'; }, 1000);
     }
   }
   $('#featuredProducts').innerHTML = ALL.filter(p => p.featured).map(cardHtml).join('') || ALL.slice(0, 3).map(cardHtml).join('');
@@ -93,6 +110,20 @@ async function init() {
     '<div><h4>তথ্য</h4><p><a href="#about">আমাদের সম্পর্কে</a><br><a href="#faq">সচরাচর জিজ্ঞাসা</a><br>' + (SETTINGS.maps_url ? '<a href="' + esc(SETTINGS.maps_url) + '" target="_blank">Google Maps-এ দেখুন</a>' : '') + '</p></div>' +
     '<div><h4>পেমেন্ট</h4><p>COD · বিকাশ · নগদ<br>ডেলিভারি: ঢাকায় ৳' + SETTINGS.delivery_inside + ', বাইরে ৳' + SETTINGS.delivery_outside + '</p></div>';
   updateCounts(); loadProducts(); maybePromo();
+  // Deep link from the sitemap / shared links: /?product=3 opens that product.
+  const deep = new URLSearchParams(location.search).get('product');
+  if (deep && Number(deep) > 0) setTimeout(() => showDetail(Number(deep)), 400);
+}
+async function applyPromoCoupon(code) {
+  window._coupon = code;
+  const sub = cartLines().reduce((a, l) => a + l.price * l.qty, 0);
+  try {
+    const r = await fetch('/api/coupons/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, subtotal: sub }) });
+    const d = await r.json();
+    window._couponDiscount = d.ok ? d.discount : 0;
+    if (!d.ok) window._coupon = '';
+  } catch (_) { window._couponDiscount = 0; }
+  closeModal(); showCart();
 }
 function filterCat(c) { $('#cat').value = c; loadProducts(); document.getElementById('products').scrollIntoView(); }
 function onSearchInput() {
@@ -146,7 +177,7 @@ async function showDetail(id) {
     '<p>' + esc(p.description) + '</p><p><span class="price">৳' + price.toLocaleString() + '</span>' + (price !== p.price ? '<span class="old">৳' + p.price.toLocaleString() + '</span>' : '') + '</p>' +
     '<p class="pmeta">ক্যাটাগরি: ' + esc(p.category) + ' · SKU: ' + esc(p.sku) + ' · স্টক: ' + p.stock + (p.allow_preorder ? ' · প্রি-অর্ডার সম্ভব' + (p.preorder_eta ? ' (' + esc(p.preorder_eta) + ')' : '') : '') + '</p>' +
     (p.images && p.images.length ? '<p class="pmeta">ছবি: ' + p.images.map(i => esc(i.label)).join(', ') + '</p>' : '') +
-    (p.variants.length ? '<label>সাইজ / রঙ বেছে নিন</label><select id="varSel">' + p.variants.map(v => '<option value="' + v.id + '">' + [v.size, v.color].filter(Boolean).join(' / ') + ' — ৳' + (p.price + v.price_delta) + ' (স্টক ' + v.stock + ')</option>').join('') + '</select>' : '') +
+    (p.variants.length ? '<label>সাইজ / রঙ বেছে নিন</label><select id="varSel">' + p.variants.map(v => '<option value="' + v.id + '"' + (v.stock <= 0 && !p.allow_preorder ? ' disabled' : '') + '>' + [v.size, v.color].filter(Boolean).join(' / ') + ' — ৳' + (p.price + v.price_delta) + ' (স্টক ' + v.stock + ')' + (v.stock <= 0 ? ' — শেষ' : '') + '</option>').join('') + '</select>' : '') +
     '<p><button class="btn" onclick="addToCart(' + p.id + ', document.getElementById(\'varSel\') ? +document.getElementById(\'varSel\').value : null); closeModal()">কার্টে যোগ করুন</button> <button class="btn ghost" onclick="closeModal()">বন্ধ করুন</button></p>' +
     (related.length ? '<h4>সম্পর্কিত পণ্য</h4><p>' + related.map(x => esc(x.name) + ' — ৳' + x.price).join('<br>') + '</p>' : '') +
     '<h4>রিভিউ (' + p.reviewCount + ')</h4>' + (p.reviews.map(x => '<p>' + x.rating + '/৫ — <b>' + esc(x.customer_name) + '</b>: ' + esc(x.comment) + '</p>').join('') || '<p>এখনো রিভিউ নেই।</p>') +
@@ -187,11 +218,13 @@ function comboDiscount(lines) {
 function showCart() {
   const lines = cartLines(); const sub = lines.reduce((a, l) => a + l.price * l.qty, 0);
   const bundle = comboDiscount(lines);
-  const flash = SETTINGS.flash_percent ? Math.round((sub - bundle) * SETTINGS.flash_percent / 100) : 0;
+  const couponDisc = window._couponDiscount || 0;
+  // Same order as the server: coupon, then combo, then flash on what is left.
+  const flash = SETTINGS.flash_percent ? Math.round((sub - couponDisc - bundle) * SETTINGS.flash_percent / 100) : 0;
   openModal('<h3>কার্ট</h3>' +
-    (lines.length ? lines.map((l, i) => '<p>' + esc(l.p.name) + (l.label ? ' (' + esc(l.label) + ')' : '') + ' × ' + l.qty + ' — ৳' + (l.price * l.qty).toLocaleString() + ' <button onclick="CART.splice(' + i + ',1); saveCart(); showCart()">মুছুন</button></p>').join('') : '<p>কার্ট খালি।</p>') +
-    '<p>মোট: ৳' + sub.toLocaleString() + (bundle ? '<br>কম্বো ছাড়: -৳' + bundle.toLocaleString() + ' (' + SETTINGS.combo_buy + ' কিনলে ' + SETTINGS.combo_free + ' ফ্রি)' : '') + (flash ? '<br>ফ্ল্যাশ সেল ছাড়: -৳' + flash.toLocaleString() : '') + '</p>' +
-    '<p><input id="cpn" placeholder="কুপন কোড (যেমন WELCOME10)"> <button class="btn ghost small" onclick="applyCoupon()">কুপন দেখুন</button> <span id="cpnMsg"></span></p>' +
+    (lines.length ? lines.map((l, i) => '<p>' + esc(l.p.name) + (l.label ? ' (' + esc(l.label) + ')' : '') + ' × ' + l.qty + ' — ৳' + (l.price * l.qty).toLocaleString() + ' <button onclick="CART.splice(' + i + ',1); saveCart(); window._coupon=\'\'; window._couponDiscount=0; showCart()">মুছুন</button></p>').join('') : '<p>কার্ট খালি।</p>') +
+    '<p>মোট: ৳' + sub.toLocaleString() + (couponDisc ? '<br>কুপন ছাড়: -৳' + couponDisc.toLocaleString() : '') + (bundle ? '<br>কম্বো ছাড়: -৳' + bundle.toLocaleString() + ' (' + SETTINGS.combo_buy + ' কিনলে ' + SETTINGS.combo_free + ' ফ্রি)' : '') + (flash ? '<br>ফ্ল্যাশ সেল ছাড়: -৳' + flash.toLocaleString() : '') + '</p>' +
+    '<p><input id="cpn" placeholder="কুপন কোড (যেমন WELCOME10)" value="' + esc(window._coupon || '') + '"> <button class="btn ghost small" onclick="applyCoupon()">কুপন দেখুন</button> <span id="cpnMsg">' + (window._couponDiscount ? 'ছাড় ৳' + window._couponDiscount.toLocaleString() : '') + '</span></p>' +
     (lines.length ? '<button class="btn" onclick="showCheckout()">চেকআউট করুন</button> ' : '') +
     '<button class="btn ghost" onclick="closeModal()">বন্ধ করুন</button>');
 }
@@ -202,23 +235,57 @@ async function applyCoupon() {
   const d = await r.json();
   document.getElementById('cpnMsg').textContent = d.ok ? 'ছাড় ৳' + d.discount + ' (' + d.percent + '%)' : (d.error || 'ভুল কোড');
   window._coupon = d.ok ? code.toUpperCase() : '';
+  window._couponDiscount = d.ok ? d.discount : 0;
+  if (d.ok) showCart();
+}
+function checkoutSummary() {
+  const lines = cartLines(); const sub = lines.reduce((a, l) => a + l.price * l.qty, 0);
+  const bundle = comboDiscount(lines);
+  const couponDisc = window._couponDiscount || 0;
+  const flash = SETTINGS.flash_percent ? Math.round((sub - couponDisc - bundle) * SETTINGS.flash_percent / 100) : 0;
+  const rawRedeem = Math.max(0, Number((document.getElementById('coRedeem') || {}).value || 0));
+  // Same caps as the server: at most 50% of the order, and at most the logged-in balance.
+  const cap50 = Math.max(0, Math.floor((sub - couponDisc - bundle - flash) / 2));
+  const balance = CUST ? (CUST.loyalty_points || 0) : Infinity;
+  const redeem = Math.min(rawRedeem, cap50, balance);
+  const afterDisc = sub - couponDisc - bundle - flash - redeem;
+  const dist = (document.getElementById('coDistrict') || {}).value || 'ঢাকা';
+  const isDhaka = dist === 'ঢাকা';
+  let delivery = isDhaka ? SETTINGS.delivery_inside : SETTINGS.delivery_outside;
+  if (afterDisc >= SETTINGS.free_delivery_threshold) delivery = 0;
+  const gift = (document.getElementById('coGift') || {}).checked ? (SETTINGS.gift_wrap_fee || 50) : 0;
+  return { sub, bundle, couponDisc, flash, redeem, delivery, gift, total: afterDisc + delivery + gift };
+}
+function updateCheckoutSummary() {
+  const el = document.getElementById('coSummary'); if (!el) return;
+  const s = checkoutSummary();
+  el.innerHTML = '<div class="card"><b>অর্ডারের হিসাব</b><br>পণ্যের মোট: ৳' + s.sub.toLocaleString() +
+    (s.couponDisc ? '<br>কুপন ছাড়: -৳' + s.couponDisc.toLocaleString() : '') +
+    (s.bundle ? '<br>কম্বো ছাড়: -৳' + s.bundle.toLocaleString() : '') +
+    (s.flash ? '<br>ফ্ল্যাশ সেল ছাড়: -৳' + s.flash.toLocaleString() : '') +
+    (s.redeem ? '<br>লয়্যালটি ছাড়: -৳' + s.redeem.toLocaleString() : '') +
+    '<br>ডেলিভারি: ' + (s.delivery === 0 ? 'ফ্রি' : '৳' + s.delivery.toLocaleString()) +
+    (s.gift ? '<br>গিফট র‍্যাপ: ৳' + s.gift.toLocaleString() : '') +
+    '<br><b>সর্বমোট: ৳' + s.total.toLocaleString() + '</b></div>';
 }
 function showCheckout() {
   const cust = CUST;
   openModal('<h3>চেকআউট</h3>' +
+    '<div id="coSummary"></div>' +
     '<label>নাম *</label><input id="coName" value="' + (cust ? esc(cust.name) : '') + '">' +
     '<label>মোবাইল *</label><input id="coPhone" placeholder="01XXXXXXXXX" value="' + (cust ? esc(cust.phone) : '') + '">' +
     '<label>ঠিকানা *</label><textarea id="coAddr"></textarea>' +
-    '<div class="row"><div><label>জেলা *</label><select id="coDistrict">' + DISTRICTS.map(d => '<option ' + (d === 'ঢাকা' ? 'selected' : '') + '>' + d + '</option>').join('') + '</select></div>' +
+    '<div class="row"><div><label>জেলা *</label><select id="coDistrict" onchange="updateCheckoutSummary()">' + DISTRICTS.map(d => '<option ' + (d === 'ঢাকা' ? 'selected' : '') + '>' + d + '</option>').join('') + '</select></div>' +
     '<div><label>থানা</label><input id="coThana"></div></div>' +
     '<label>পেমেন্ট</label><select id="coPay"><option>COD</option><option>bKash</option><option>Nagad</option></select>' +
     '<p class="small">বিকাশ/নগদ: অর্ডারের পর দোকান থেকে নম্বর জানিয়ে দেওয়া হবে (ম্যানুয়াল পেমেন্ট)।</p>' +
     '<label>ডেলিভারি সময়</label><select id="coSlot"><option value="">যেকোনো সময়</option><option>সকাল ৯টা–১২টা</option><option>দুপুর ১২টা–৩টা</option><option>বিকেল ৩টা–৬টা</option></select>' +
-    '<label><input type="checkbox" id="coGift" style="width:auto"> গিফট র‍্যাপ (+৳' + (SETTINGS.gift_wrap_fee || 50) + ')</label>' +
+    '<label><input type="checkbox" id="coGift" style="width:auto" onchange="updateCheckoutSummary()"> গিফট র‍্যাপ (+৳' + (SETTINGS.gift_wrap_fee || 50) + ')</label>' +
     '<input id="coGiftMsg" placeholder="গিফট মেসেজ (ঐচ্ছিক)">' +
-    '<label>লয়্যালটি পয়েন্ট ব্যবহার</label><input id="coRedeem" type="number" min="0" value="0" placeholder="0">' +
-    '<label>রেফারেল কোড (ঐচ্ছিক)</label><input id="coRef" placeholder="যেমন RF1234">' +
+    '<label>লয়্যালটি পয়েন্ট ব্যবহার' + (cust ? ' (আপনার ব্যালেন্স: ' + (cust.loyalty_points || 0) + ' পয়েন্ট)' : ' (লগইন করলে ব্যালেন্স দেখা যাবে)') + '</label><input id="coRedeem" type="number" min="0" value="0" placeholder="0" oninput="updateCheckoutSummary()">' +
+    '<label>রেফারেল কোড (ঐচ্ছিক — শুধু প্রথম অর্ডারে)</label><input id="coRef" placeholder="যেমন RF1234">' +
     '<p><button class="btn" onclick="placeOrder()">অর্ডার করুন</button> <button class="btn ghost" onclick="closeModal()">বাতিল</button></p><div id="coErr"></div>');
+  updateCheckoutSummary();
 }
 async function placeOrder() {
   const body = { name: document.getElementById('coName').value, phone: document.getElementById('coPhone').value, address: document.getElementById('coAddr').value, district: document.getElementById('coDistrict').value, thana: document.getElementById('coThana').value, payment_method: document.getElementById('coPay').value, gift_wrap: document.getElementById('coGift').checked, gift_message: document.getElementById('coGiftMsg').value, delivery_slot: document.getElementById('coSlot').value, redeem_points: Number(document.getElementById('coRedeem').value || 0), referral_code: document.getElementById('coRef').value, coupon_code: window._coupon || '', items: CART.map(i => ({ product_id: i.product_id, variant_id: i.variant_id, qty: i.qty })) };
@@ -280,13 +347,26 @@ async function showMyOrders() {
 }
 function reorder(id) {
   const o = (window._myOrders || []).find(x => x.id === id); if (!o) return;
-  o.items.forEach(i => { const ex = CART.find(c => c.product_id === i.product_id); if (ex) ex.qty += i.qty; else CART.push({ product_id: i.product_id, variant_id: null, qty: i.qty }); });
-  saveCart(); closeModal(); toast('আগের অর্ডারের পণ্য কার্টে যোগ হয়েছে'); showCart();
+  let added = 0, skipped = 0;
+  o.items.forEach(i => {
+    const p = ALL.find(x => x.id === i.product_id);
+    if (!p || !p.active) { skipped++; return; }
+    const ex = CART.find(c => c.product_id === i.product_id && (c.variant_id || null) === (i.variant_id || null));
+    if (ex) ex.qty += i.qty; else CART.push({ product_id: i.product_id, variant_id: i.variant_id || null, qty: i.qty });
+    added++;
+  });
+  saveCart(); closeModal();
+  toast(added ? 'আগের অর্ডারের পণ্য কার্টে যোগ হয়েছে' + (skipped ? ' (' + skipped + 'টি পণ্য আর পাওয়া যায়নি)' : '') : 'কোনো পণ্য আর পাওয়া যায়নি');
+  if (added) showCart();
 }
 function maybePromo() {
   if (sessionStorage.getItem('rf_promo_seen')) return;
   sessionStorage.setItem('rf_promo_seen', '1');
   const code = SETTINGS.promo_code || 'WELCOME10';
-  setTimeout(() => openModal('<h3>স্বাগতম অফার</h3><p>প্রথম অর্ডারে কুপন কোড <b>' + esc(code) + '</b> ব্যবহার করুন — ১০% ছাড় (কমপক্ষে ৳১,০০০)।</p><p><button class="btn" onclick="window._coupon=\'' + esc(code) + '\';closeModal();showCart()">কুপন নিয়ে কার্টে যান</button> <button class="btn ghost" onclick="closeModal()">পরে</button></p>'), 1200);
+  // Never hijack a modal the customer already opened (cart / checkout / tracking).
+  setTimeout(() => {
+    if (document.getElementById('modal').classList.contains('open')) return;
+    openModal('<h3>স্বাগতম অফার</h3><p>প্রথম অর্ডারে কুপন কোড <b>' + esc(code) + '</b> ব্যবহার করুন — ১০% ছাড় (কমপক্ষে ৳১,০০০)।</p><p><button class="btn" onclick="applyPromoCoupon(\'' + esc(code) + '\')">কুপন নিয়ে কার্টে যান</button> <button class="btn ghost" onclick="closeModal()">পরে</button></p>');
+  }, 1200);
 }
 init();

@@ -1,4 +1,4 @@
-# Rongdhonu Fashion — রঙধনু ফ্যাশন (v2.0)
+# Rongdhonu Fashion — রঙধনু ফ্যাশন (v2.1 — audit + fix pass)
 
 A complete demo boutique storefront + admin for a Bangladeshi online fashion shop.
 Node.js (Express, only dependency) + SQLite via built-in `node:sqlite`. No build step.
@@ -29,7 +29,9 @@ Requires Node 22+. The database file is created automatically on first run
 - Bangla/English language switch for interface strings.
 - Promo popup once per session (from the real promo coupon in Settings).
 - Checkout: district + thana, COD / bKash / Nagad (manual — admin confirms payment),
-  delivery slot, gift wrap (৳50) + message, loyalty redeem, referral code.
+  delivery slot, gift wrap (৳50) + message, loyalty redeem, referral code, and a
+  live order summary (subtotal, all discounts, delivery, total) before ordering.
+- GA4 and Facebook Pixel load only when the owner saves their own IDs in Settings.
 - Coupons: `WELCOME10` (10% off, min ৳1000), `FLASH20` (20% off, min ৳2000).
 - Combo offer: buy 2 get 1 free (cheapest unit free). Loyalty: 1 point per ৳100
   spent, 1 point = ৳1, redeem up to 50%. Referral: 50 points on registration,
@@ -85,10 +87,41 @@ Or manually:
 
 ## Order flow (invariants)
 
-- Stock decreases on order (product + variant), restores on cancel.
-- Loyalty earned = floor(total / 100) when loyalty is enabled.
+- Stock decreases on order (product + variant), restores on cancel — exactly what
+  was taken, once (variant stock too; bulk cancel included). Pre-order lines take
+  only the stock that exists; stock never goes below 0.
+- A cancelled order is terminal and a delivered order cannot go back to
+  pending/confirmed/shipped. Returns marked "received" restock exactly once,
+  and never if the order was already cancelled.
+- A product that appears in a live order cannot be deleted (deactivate it instead).
+- Loyalty earned = floor(total / 100) when loyalty is enabled. Referral bonus
+  (100 points) is paid only on the referred customer's first order.
 - Free delivery when the after-discount subtotal reaches the threshold.
-- Returns marked "received" restock the product exactly once.
+- The whole order is written in one transaction — a failure leaves no partial order.
+- Settings saves never wipe a saved API key (empty key fields mean "unchanged")
+  and a cleared number field keeps its old value instead of becoming 0.
+- The launch checklist "PIN changed" item is computed from the real PIN hash —
+  it is done only when the demo PIN 1234 has actually been changed.
+
+## v2.1 audit fixes (2026-11-02)
+
+Full audit pass (API harness + live checks) after Naim reported many things wrong:
+variant stock was never restored on cancel, bulk cancel skipped the stock ledger,
+pre-orders drove stock to −1, the sitemap listed API URLs (`/api/products/…`)
+instead of real pages, admin CSV/backup download links returned 401 (the UI uses
+plain `<a href>` links, which send no auth header), the launch checklist claimed
+the PIN was "done" while 1234 was still in use, products in live orders could be
+deleted, a settings save with empty key fields wiped Steadfast/SMS keys, cleared
+number fields became 0, the parcel-label button crashed from the order-detail
+view, product edit and generic edit were missing from the admin UI, CSV import
+inserted a fake sample product, the checkout showed no order summary before
+ordering, the promo popup could hijack an open cart/checkout modal, and the
+storefront showed a blank page when the API was slow (free-tier cold start).
+All fixed and re-tested. Testimonials are intentionally not seeded — real
+customer words only. The live Render URL currently returns 404
+(`x-render-routing: no-server`) on every path: no web service is running behind
+that hostname yet — check the Render dashboard (service type must be Web
+Service, not Static Site; check Events/Logs for a failed deploy).
 
 ## Honest limits (v2.0)
 

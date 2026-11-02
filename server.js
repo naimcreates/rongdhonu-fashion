@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS customers (id INTEGER PRIMARY KEY AUTOINCREMENT, name
 CREATE TABLE IF NOT EXISTS customer_addresses (id INTEGER PRIMARY KEY AUTOINCREMENT, customer_id INTEGER NOT NULL, label TEXT NOT NULL DEFAULT 'বাড়ি', address TEXT NOT NULL, district TEXT NOT NULL DEFAULT '', is_default INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS coupons (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE NOT NULL, percent INTEGER NOT NULL, min_order INTEGER NOT NULL DEFAULT 0, active INTEGER NOT NULL DEFAULT 1);
 CREATE TABLE IF NOT EXISTS orders (id INTEGER PRIMARY KEY AUTOINCREMENT, order_number TEXT UNIQUE NOT NULL, customer_name TEXT NOT NULL, phone TEXT NOT NULL, address TEXT NOT NULL, district TEXT NOT NULL DEFAULT '', thana TEXT NOT NULL DEFAULT '', subtotal INTEGER NOT NULL, discount INTEGER NOT NULL DEFAULT 0, coupon_code TEXT NOT NULL DEFAULT '', flash_discount INTEGER NOT NULL DEFAULT 0, bundle_discount INTEGER NOT NULL DEFAULT 0, delivery_charge INTEGER NOT NULL, total INTEGER NOT NULL, payment_method TEXT NOT NULL DEFAULT 'COD', payment_status TEXT NOT NULL DEFAULT 'pending', status TEXT NOT NULL DEFAULT 'pending', consignment_id TEXT NOT NULL DEFAULT '', courier_status TEXT NOT NULL DEFAULT '', courier_fee INTEGER NOT NULL DEFAULT 0, courier TEXT NOT NULL DEFAULT 'Steadfast', gift_wrap INTEGER NOT NULL DEFAULT 0, gift_message TEXT NOT NULL DEFAULT '', delivery_slot TEXT NOT NULL DEFAULT '', has_preorder INTEGER NOT NULL DEFAULT 0, internal_note TEXT NOT NULL DEFAULT '', loyalty_earned INTEGER NOT NULL DEFAULT 0, loyalty_redeemed INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE, product_id INTEGER NOT NULL, product_name TEXT NOT NULL, variant_label TEXT NOT NULL DEFAULT '', qty INTEGER NOT NULL, price INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE, product_id INTEGER NOT NULL, product_name TEXT NOT NULL, variant_label TEXT NOT NULL DEFAULT '', qty INTEGER NOT NULL, price INTEGER NOT NULL, variant_id INTEGER NOT NULL DEFAULT 0, stock_taken INTEGER NOT NULL DEFAULT 0, variant_taken INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS payments (id INTEGER PRIMARY KEY AUTOINCREMENT, method TEXT NOT NULL, amount INTEGER NOT NULL, reference TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE, customer_name TEXT NOT NULL, rating INTEGER NOT NULL, comment TEXT NOT NULL DEFAULT '', approved INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS banners (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, subtitle TEXT NOT NULL DEFAULT '', position TEXT NOT NULL DEFAULT 'hero', active INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL);
@@ -55,7 +55,7 @@ function addCol(table, col, def) {
   const cols = db.prepare('PRAGMA table_info(' + table + ')').all().map(c => c.name);
   if (!cols.includes(col)) { try { db.exec('ALTER TABLE ' + table + ' ADD COLUMN ' + col + ' ' + def); } catch (_) {} }
 }
-[['settings','business_email',"TEXT NOT NULL DEFAULT ''"],['settings','maps_url',"TEXT NOT NULL DEFAULT ''"],['settings','ga4_id',"TEXT NOT NULL DEFAULT ''"],['settings','pixel_id',"TEXT NOT NULL DEFAULT ''"],['settings','gsc_code',"TEXT NOT NULL DEFAULT ''"],['settings','support_package',"TEXT NOT NULL DEFAULT ''"],['settings','support_until',"TEXT NOT NULL DEFAULT ''"],['settings','promo_code',"TEXT NOT NULL DEFAULT 'WELCOME10'"],['settings','flash_name',"TEXT NOT NULL DEFAULT ''"],['settings','flash_percent',"INTEGER NOT NULL DEFAULT 0"],['settings','flash_ends_at',"TEXT NOT NULL DEFAULT ''"],['settings','gift_wrap_fee',"INTEGER NOT NULL DEFAULT 50"],['settings','loyalty_enabled',"INTEGER NOT NULL DEFAULT 1"],['settings','combo_enabled',"INTEGER NOT NULL DEFAULT 1"],['settings','combo_buy',"INTEGER NOT NULL DEFAULT 2"],['settings','combo_free',"INTEGER NOT NULL DEFAULT 1"],['settings','preorder_enabled',"INTEGER NOT NULL DEFAULT 1"],['settings','steadfast_api_key',"TEXT NOT NULL DEFAULT ''"],['settings','steadfast_secret',"TEXT NOT NULL DEFAULT ''"],['settings','sms_api_key',"TEXT NOT NULL DEFAULT ''"],['settings','bkash_username',"TEXT NOT NULL DEFAULT ''"],['settings','nagad_username',"TEXT NOT NULL DEFAULT ''"],['settings','seo_title',"TEXT NOT NULL DEFAULT ''"],['settings','seo_description',"TEXT NOT NULL DEFAULT ''"],['settings','pickup_address',"TEXT NOT NULL DEFAULT ''"],['settings','hotline',"TEXT NOT NULL DEFAULT ''"],['products','seo_title',"TEXT NOT NULL DEFAULT ''"],['products','seo_description',"TEXT NOT NULL DEFAULT ''"],['products','vendor_id',"INTEGER NOT NULL DEFAULT 0"],['products','allow_preorder',"INTEGER NOT NULL DEFAULT 0"],['products','preorder_eta',"TEXT NOT NULL DEFAULT ''"],['products','tags',"TEXT NOT NULL DEFAULT ''"],['categories','parent_id',"INTEGER NOT NULL DEFAULT 0"],['orders','flash_discount',"INTEGER NOT NULL DEFAULT 0"],['orders','bundle_discount',"INTEGER NOT NULL DEFAULT 0"],['orders','delivery_slot',"TEXT NOT NULL DEFAULT ''"],['orders','has_preorder',"INTEGER NOT NULL DEFAULT 0"],['orders','courier_label',"TEXT NOT NULL DEFAULT ''"],['customers','pin_hash',"TEXT NOT NULL DEFAULT ''"],['customers','referral_code',"TEXT NOT NULL DEFAULT ''"],['customers','referred_by',"TEXT NOT NULL DEFAULT ''"]].forEach(a => addCol(a[0], a[1], a[2]));
+[['settings','business_email',"TEXT NOT NULL DEFAULT ''"],['settings','maps_url',"TEXT NOT NULL DEFAULT ''"],['settings','ga4_id',"TEXT NOT NULL DEFAULT ''"],['settings','pixel_id',"TEXT NOT NULL DEFAULT ''"],['settings','gsc_code',"TEXT NOT NULL DEFAULT ''"],['settings','support_package',"TEXT NOT NULL DEFAULT ''"],['settings','support_until',"TEXT NOT NULL DEFAULT ''"],['settings','promo_code',"TEXT NOT NULL DEFAULT 'WELCOME10'"],['settings','flash_name',"TEXT NOT NULL DEFAULT ''"],['settings','flash_percent',"INTEGER NOT NULL DEFAULT 0"],['settings','flash_ends_at',"TEXT NOT NULL DEFAULT ''"],['settings','gift_wrap_fee',"INTEGER NOT NULL DEFAULT 50"],['settings','loyalty_enabled',"INTEGER NOT NULL DEFAULT 1"],['settings','combo_enabled',"INTEGER NOT NULL DEFAULT 1"],['settings','combo_buy',"INTEGER NOT NULL DEFAULT 2"],['settings','combo_free',"INTEGER NOT NULL DEFAULT 1"],['settings','preorder_enabled',"INTEGER NOT NULL DEFAULT 1"],['settings','steadfast_api_key',"TEXT NOT NULL DEFAULT ''"],['settings','steadfast_secret',"TEXT NOT NULL DEFAULT ''"],['settings','sms_api_key',"TEXT NOT NULL DEFAULT ''"],['settings','bkash_username',"TEXT NOT NULL DEFAULT ''"],['settings','nagad_username',"TEXT NOT NULL DEFAULT ''"],['settings','seo_title',"TEXT NOT NULL DEFAULT ''"],['settings','seo_description',"TEXT NOT NULL DEFAULT ''"],['settings','pickup_address',"TEXT NOT NULL DEFAULT ''"],['settings','hotline',"TEXT NOT NULL DEFAULT ''"],['products','seo_title',"TEXT NOT NULL DEFAULT ''"],['products','seo_description',"TEXT NOT NULL DEFAULT ''"],['products','vendor_id',"INTEGER NOT NULL DEFAULT 0"],['products','allow_preorder',"INTEGER NOT NULL DEFAULT 0"],['products','preorder_eta',"TEXT NOT NULL DEFAULT ''"],['products','tags',"TEXT NOT NULL DEFAULT ''"],['categories','parent_id',"INTEGER NOT NULL DEFAULT 0"],['orders','flash_discount',"INTEGER NOT NULL DEFAULT 0"],['orders','bundle_discount',"INTEGER NOT NULL DEFAULT 0"],['orders','delivery_slot',"TEXT NOT NULL DEFAULT ''"],['orders','has_preorder',"INTEGER NOT NULL DEFAULT 0"],['orders','courier_label',"TEXT NOT NULL DEFAULT ''"],['order_items','variant_id',"INTEGER NOT NULL DEFAULT 0"],['order_items','stock_taken',"INTEGER NOT NULL DEFAULT 0"],['order_items','variant_taken',"INTEGER NOT NULL DEFAULT 0"],['customers','pin_hash',"TEXT NOT NULL DEFAULT ''"],['customers','referral_code',"TEXT NOT NULL DEFAULT ''"],['customers','referred_by',"TEXT NOT NULL DEFAULT ''"]].forEach(a => addCol(a[0], a[1], a[2]));
 
 function audit(actor, action, detail) { try { db.prepare('INSERT INTO audit_logs (actor, action, detail, created_at) VALUES (?, ?, ?, ?)').run(actor, action, detail || '', nowIso()); } catch (_) {} }
 function notify(title, body) { try { db.prepare('INSERT INTO notifications (title, body, created_at) VALUES (?, ?, ?)').run(title, body || '', nowIso()); } catch (_) {} }
@@ -121,7 +121,7 @@ function fillGaps() {
     faqs.forEach(f => ins.run(f[0], f[1], nowIso())); filled++;
   }
   if (db.prepare('SELECT COUNT(*) c FROM staff').get().c === 0) { db.prepare("INSERT INTO staff (name, role, pin_hash, created_at) VALUES ('Viewer Demo', 'viewer', ?, ?)").run(sha256('7777'), nowIso()); filled++; }
-  if (db.prepare('SELECT COUNT(*) c FROM testimonials').get().c === 0) { db.prepare("INSERT INTO testimonials (customer_name, comment, rating, created_at) VALUES ('আয়েশা', 'শাড়িটা খুব সুন্দর, কাপড় ভালো।', 5, ?), ('রিমা', 'সাইজ ঠিকঠাক, ডেলিভারি দ্রুত।', 4, ?)").run(nowIso(), nowIso()); filled++; }
+  // Testimonials are deliberately NOT seeded — real customer words only, added by the admin.
   if (db.prepare('SELECT COUNT(*) c FROM cms_pages').get().c === 0) { db.prepare("INSERT INTO cms_pages (slug, title, body, created_at) VALUES ('about', 'আমাদের সম্পর্কে', 'রঙধনু ফ্যাশন — ঢাকার একটি ছোট বুটিক।', ?), ('delivery', 'ডেলিভারি নীতি', 'ঢাকায় ৳৬০, বাইরে ৳১২০।', ?), ('return', 'রিটার্ন নীতি', '৪৮ ঘণ্টার মধ্যে বদলানো যাবে।', ?)").run(nowIso(), nowIso(), nowIso()); filled++; }
   db.prepare('SELECT * FROM products').all().forEach((p, i) => {
     if (!p.sku) { db.prepare('UPDATE products SET sku = ? WHERE id = ?').run('SKU-00' + (i + 1), p.id); filled++; }
@@ -213,11 +213,11 @@ app.post('/api/coupons/preview', (req, res) => {
   res.json({ ok: true, percent: c.percent, discount: Math.round(money(subtotal) * c.percent / 100) });
 });
 app.get('/sitemap.xml', (req, res) => {
-  const s = getSettings(); const host = (s && s.maps_url) || '';
-  const urls = db.prepare('SELECT * FROM products WHERE active = 1').all().map(p => '  <url><loc>/api/products/' + p.id + '</loc></url>').join('\n');
-  res.setHeader('Content-Type', 'application/xml').send('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>/</loc></url>\n' + urls + '\n</urlset>');
+  const base = req.protocol + '://' + req.get('host');
+  const urls = db.prepare('SELECT * FROM products WHERE active = 1').all().map(p => '  <url><loc>' + base + '/?product=' + p.id + '</loc></url>').join('\n');
+  res.setHeader('Content-Type', 'application/xml').send('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>' + base + '/</loc></url>\n' + urls + '\n</urlset>');
 });
-app.get('/robots.txt', (req, res) => { res.type('text/plain').send('User-agent: *\nAllow: /\nSitemap: /sitemap.xml\n'); });
+app.get('/robots.txt', (req, res) => { const base = req.protocol + '://' + req.get('host'); res.type('text/plain').send('User-agent: *\nAllow: /\nSitemap: ' + base + '/sitemap.xml\n'); });
 
 const PHONE_RE = /^(\+880|880|0)1[3-9]\d{8}$/;
 function normPhone(p) { return String(p || '').replace(/[\s-]/g, ''); }
@@ -234,18 +234,20 @@ app.post('/api/orders', (req, res) => {
     const p = db.prepare('SELECT * FROM products WHERE id = ? AND active = 1').get(Number(it.product_id));
     if (!p) return res.status(400).json({ error: 'পণ্য পাওয়া যায়নি' });
     const qty = Math.max(1, Math.min(99, Number(it.qty) || 1));
-    let price = p.price; let label = '';
+    let price = p.price; let label = ''; let variant = null;
+    const preorderOk = Boolean(p.allow_preorder && settings.preorder_enabled);
     if (it.variant_id) {
-      const v = db.prepare('SELECT * FROM variants WHERE id = ? AND product_id = ?').get(Number(it.variant_id), p.id);
-      if (!v) return res.status(400).json({ error: 'ভ্যারিয়েন্ট পাওয়া যায়নি' });
-      if (v.stock < qty && !(p.allow_preorder && settings.preorder_enabled)) return res.status(400).json({ error: p.name + ' — এই সাইজ/রঙে স্টক শেষ' });
-      if (v.stock < qty) hasPreorder = 1;
-      price = p.price + v.price_delta; label = [v.size, v.color].filter(Boolean).join(' / ');
-    } else if (p.stock < qty) {
-      if (!(p.allow_preorder && settings.preorder_enabled)) return res.status(400).json({ error: p.name + ' — স্টক শেষ' });
-      hasPreorder = 1;
+      variant = db.prepare('SELECT * FROM variants WHERE id = ? AND product_id = ?').get(Number(it.variant_id), p.id);
+      if (!variant) return res.status(400).json({ error: 'ভ্যারিয়েন্ট পাওয়া যায়নি' });
+      price = p.price + variant.price_delta; label = [variant.size, variant.color].filter(Boolean).join(' / ');
     }
-    subtotal += price * qty; lines.push({ p, qty, price, label, variant_id: it.variant_id || null });
+    // Stock actually available: variant stock if a variant was chosen, else product stock.
+    // Only that much is taken; the rest (if any) is a pre-order. Stock never goes below 0.
+    const avail = variant ? variant.stock : p.stock;
+    if (avail < qty && !preorderOk) return res.status(400).json({ error: p.name + ' — স্টক শেষ' });
+    const stockTaken = Math.min(qty, Math.max(0, avail));
+    if (stockTaken < qty) hasPreorder = 1;
+    subtotal += price * qty; lines.push({ p, qty, price, label, variant, variant_id: it.variant_id || null, stockTaken });
   }
   // Combo: buy N get M free — cheapest units free
   let bundleDiscount = 0;
@@ -279,14 +281,25 @@ app.post('/api/orders', (req, res) => {
   const total = afterDisc + delivery + giftFee;
   const orderNumber = 'RF-' + String(Date.now()).slice(-6) + Math.floor(Math.random() * 90 + 10);
   const loyaltyEarned = settings.loyalty_enabled ? Math.floor(total / 100) : 0;
+  // Referral bonus is for the referred customer's FIRST order only — check before inserting.
+  const isFirstOrder = db.prepare("SELECT COUNT(*) c FROM orders WHERE phone = ? AND status != 'cancelled'").get(String(b.phone).trim()).c === 0;
+  // Whole order is one transaction: a failure half-way leaves no partial order/stock behind.
+  try {
+  db.exec('BEGIN');
   const ins = db.prepare('INSERT INTO orders (order_number, customer_name, phone, address, district, thana, subtotal, discount, coupon_code, flash_discount, bundle_discount, delivery_charge, total, payment_method, status, courier, gift_wrap, gift_message, delivery_slot, has_preorder, loyalty_earned, loyalty_redeemed, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'pending\', \'Steadfast\', ?, ?, ?, ?, ?, ?, ?)');
   const r = ins.run(orderNumber, String(b.name).trim(), String(b.phone).trim(), String(b.address).trim(), String(b.district || ''), String(b.thana || ''), subtotal, discount, couponCode, flashDiscount, bundleDiscount, delivery, total, b.payment_method || 'COD', b.gift_wrap ? 1 : 0, String(b.gift_message || ''), String(b.delivery_slot || ''), hasPreorder, loyaltyEarned, loyaltyRedeemed, nowIso());
-  const insItem = db.prepare('INSERT INTO order_items (order_id, product_id, product_name, variant_label, qty, price) VALUES (?, ?, ?, ?, ?, ?)');
+  const insItem = db.prepare('INSERT INTO order_items (order_id, product_id, product_name, variant_label, qty, price, variant_id, stock_taken, variant_taken) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
   for (const l of lines) {
-    insItem.run(r.lastInsertRowid, l.p.id, l.p.name, l.label, l.qty, l.price);
-    if (l.variant_id) db.prepare('UPDATE variants SET stock = stock - ? WHERE id = ?').run(l.qty, l.variant_id);
-    db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?').run(l.qty, l.p.id);
-    db.prepare('INSERT INTO stock_movements (product_id, qty, reason, created_at) VALUES (?, ?, ?, ?)').run(l.p.id, -l.qty, 'order ' + orderNumber, nowIso());
+    // Take only what was available (stockTaken); never below 0. Variant lines also
+    // draw down the product-level stock by the same amount (capped at what it has).
+    const pTake = Math.min(l.stockTaken, Math.max(0, l.p.stock));
+    const vTake = l.variant ? l.stockTaken : 0;
+    insItem.run(r.lastInsertRowid, l.p.id, l.p.name, l.label, l.qty, l.price, l.variant_id ? Number(l.variant_id) : 0, pTake, vTake);
+    if (vTake > 0) db.prepare('UPDATE variants SET stock = stock - ? WHERE id = ?').run(vTake, l.variant_id);
+    if (pTake > 0) {
+      db.prepare('UPDATE products SET stock = stock - ? WHERE id = ?').run(pTake, l.p.id);
+      db.prepare('INSERT INTO stock_movements (product_id, qty, reason, created_at) VALUES (?, ?, ?, ?)').run(l.p.id, -pTake, 'order ' + orderNumber, nowIso());
+    }
   }
   let cust = db.prepare('SELECT * FROM customers WHERE phone = ?').get(String(b.phone).trim());
   if (!cust) {
@@ -295,15 +308,18 @@ app.post('/api/orders', (req, res) => {
   } else {
     db.prepare('UPDATE customers SET loyalty_points = loyalty_points + ? - ? WHERE id = ?').run(loyaltyEarned, loyaltyRedeemed, cust.id);
   }
-  if (b.referral_code && cust) {
+  if (b.referral_code && cust && isFirstOrder) {
     const ref = db.prepare('SELECT * FROM customers WHERE referral_code = ?').get(String(b.referral_code).trim().toUpperCase());
-    if (ref && ref.phone !== String(b.phone).trim()) {
+    const already = ref ? db.prepare('SELECT COUNT(*) c FROM referrals WHERE referrer_phone = ? AND referred_phone = ?').get(ref.phone, String(b.phone).trim()).c : 1;
+    if (ref && ref.phone !== String(b.phone).trim() && !already) {
       db.prepare('INSERT INTO referrals (referrer_phone, referred_phone, points, created_at) VALUES (?, ?, ?, ?)').run(ref.phone, String(b.phone).trim(), 100, nowIso());
       db.prepare('UPDATE customers SET loyalty_points = loyalty_points + 100 WHERE id = ?').run(ref.id);
     }
   }
   notify('নতুন অর্ডার', orderNumber + ' — ৳' + total);
   queueSms(String(b.phone).trim(), 'রঙধনু ফ্যাশন: আপনার অর্ডার ' + orderNumber + ' পেয়েছি। মোট ৳' + total + '। ধন্যবাদ!');
+  db.exec('COMMIT');
+  } catch (e) { try { db.exec('ROLLBACK'); } catch (_) {} console.error('order failed', e); return res.status(500).json({ error: 'অর্ডার সেভ হয়নি — আবার চেষ্টা করুন' }); }
   const waText = encodeURIComponent('অর্ডার ' + orderNumber + '\nনাম: ' + b.name + '\nমোট: ৳' + total + '\nপেমেন্ট: ' + (b.payment_method || 'COD'));
   res.json({ ok: true, order_number: orderNumber, total, delivery_charge: delivery, discount, flash_discount: flashDiscount, bundle_discount: bundleDiscount, loyalty_earned: loyaltyEarned, loyalty_redeemed: loyaltyRedeemed, whatsapp_url: 'https://wa.me/' + settings.whatsapp_number + '?text=' + waText });
 });
@@ -353,7 +369,8 @@ app.post('/api/customers/register', (req, res) => {
   }
   const token = crypto.randomBytes(24).toString('hex');
   custSessions.set(token, { customer_id: cust.id, expires: Date.now() + 7 * 24 * 60 * 60 * 1000 });
-  res.json({ ok: true, token, loyalty_points: 50 });
+  const fresh = db.prepare('SELECT loyalty_points FROM customers WHERE id = ?').get(cust.id);
+  res.json({ ok: true, token, loyalty_points: fresh ? fresh.loyalty_points : 50 });
 });
 app.post('/api/customers/login', (req, res) => {
   const b = req.body || {};
@@ -383,7 +400,9 @@ app.post('/api/customers/addresses', custAuth, (req, res) => {
 // ---------- admin auth (PIN, Owner 1234 default; staff PINs) ----------
 const sessions = new Map();
 function adminAuth(req, res, next) {
-  const s = sessions.get(req.headers['x-admin-token']);
+  // Header token (fetch) or ?token= query param (plain <a href> downloads in the admin UI)
+  const tok = req.headers['x-admin-token'] || req.query.token;
+  const s = sessions.get(tok);
   if (!s || s.expires < Date.now()) return res.status(401).json({ error: 'লগইন করুন' });
   req.admin = s; next();
 }
@@ -462,7 +481,7 @@ app.get('/api/admin/launch-checklist', adminAuth, (req, res) => {
   const s = getSettings();
   const items = [
     { id: 'domain', label: 'নিজের ডোমেইন', done: false, hint: 'Namecheap/GoDaddy থেকে কিনুন (~$10–12/বছর)' },
-    { id: 'hosting', label: 'হোস্টিং + SSL', done: true, hint: 'Render/Vercel ফ্রি টিয়ার — SSL অটো' },
+    { id: 'hosting', label: 'হোস্টিং + SSL', done: Boolean(process.env.RENDER), hint: 'Render/Vercel ফ্রি টিয়ার — SSL অটো (এখনো Render-এ deploy হয়নি)' },
     { id: 'email', label: 'ব্যবসায়িক ইমেইল', done: Boolean(s.business_email && !s.business_email.includes('example')), hint: 'Settings → ব্যবসায়িক ইমেইল বসান' },
     { id: 'ga4', label: 'Google Analytics (GA4)', done: Boolean(s.ga4_id), hint: 'Settings → GA4 ID বসান' },
     { id: 'gsc', label: 'Google Search Console', done: Boolean(s.gsc_code), hint: 'Settings → GSC verification কোড বসান' },
@@ -470,7 +489,7 @@ app.get('/api/admin/launch-checklist', adminAuth, (req, res) => {
     { id: 'about', label: 'About / ডেলিভারি / রিটার্ন লেখা', done: Boolean(s.about_text && s.delivery_info && s.return_policy), hint: 'Settings থেকে লেখা যাবে' },
     { id: 'products', label: 'আসল পণ্য আপলোড (কমপক্ষে ১০টি)', done: db.prepare('SELECT COUNT(*) c FROM products').get().c >= 10, hint: 'Products → CSV import বা একে একে যোগ করুন' },
     { id: 'whatsapp', label: 'আসল WhatsApp নম্বর', done: s.whatsapp_number !== '8801700000000', hint: 'Settings → WhatsApp নম্বর বদলান' },
-    { id: 'pin', label: 'অ্যাডমিন PIN বদলানো', done: true, hint: 'Settings → নতুন PIN (ডেমো PIN 1234 বদলে নিন)' },
+    { id: 'pin', label: 'অ্যাডমিন PIN বদলানো', done: s.pin_hash !== sha256('1234'), hint: 'Settings → নতুন PIN (ডেমো PIN 1234 বদলে নিন)' },
     { id: 'gateway', label: 'বিকাশ/নগদ গেটওয়ে প্রস্তুতি', done: Boolean(s.bkash_username || s.nagad_username), hint: 'মার্চেন্ট অ্যাকাউন্ট + key লাগবে' },
     { id: 'courier', label: 'Steadfast API key', done: Boolean(s.steadfast_api_key), hint: 'Settings → Steadfast key বসান, না হলে CSV হ্যান্ডওভার' },
     { id: 'sms', label: 'SMS গেটওয়ে', done: Boolean(s.sms_api_key), hint: 'SMS provider-এর key লাগবে' },
@@ -497,12 +516,15 @@ function crud(table, fields, opts = {}) {
     const b = req.body || {};
     const cols = fields.filter(f => b[f] !== undefined);
     if (!cols.length) return res.json({ ok: true });
-    db.prepare('UPDATE ' + table + ' SET ' + cols.map(f => f + ' = ?').join(', ') + ' WHERE id = ?').run(...cols.map(f => b[f]), Number(req.params.id));
+    try {
+      db.prepare('UPDATE ' + table + ' SET ' + cols.map(f => f + ' = ?').join(', ') + ' WHERE id = ?').run(...cols.map(f => b[f]), Number(req.params.id));
+    } catch (e) { return res.status(400).json({ error: 'সেভ হয়নি — হয়তো একই নাম/কোড আগেই আছে' }); }
     audit(req.admin.name, table + '_update', 'id ' + req.params.id);
     res.json({ ok: true });
   });
   app.delete(base + '/:id', adminAuth, requireWrite, (req, res) => {
-    db.prepare('DELETE FROM ' + table + ' WHERE id = ?').run(Number(req.params.id));
+    try { db.prepare('DELETE FROM ' + table + ' WHERE id = ?').run(Number(req.params.id)); }
+    catch (e) { return res.status(400).json({ error: 'মোছা যায়নি' }); }
     audit(req.admin.name, table + '_delete', 'id ' + req.params.id);
     res.json({ ok: true });
   });
@@ -512,6 +534,7 @@ crud('banners', ['title', 'subtitle', 'position', 'active']);
 crud('campaigns', ['name', 'description', 'discount_percent', 'start_date', 'end_date', 'active']);
 crud('cms_pages', ['slug', 'title', 'body']);
 crud('faqs', ['question', 'answer']);
+crud('testimonials', ['customer_name', 'comment', 'rating', 'approved']);
 crud('shipping_zones', ['name', 'districts', 'charge']);
 crud('vendors', ['name', 'phone', 'commission_percent']);
 crud('expenses', ['category', 'amount', 'note']);
@@ -536,7 +559,12 @@ app.put('/api/admin/products/:id', adminAuth, requireWrite, (req, res) => {
   audit(req.admin.name, 'product_update', String(b.name));
   res.json({ ok: true });
 });
-app.delete('/api/admin/products/:id', adminAuth, requireWrite, (req, res) => { db.prepare('DELETE FROM products WHERE id = ?').run(Number(req.params.id)); audit(req.admin.name, 'product_delete', 'id ' + req.params.id); res.json({ ok: true }); });
+app.delete('/api/admin/products/:id', adminAuth, requireWrite, (req, res) => {
+  const id = Number(req.params.id);
+  const inOrders = db.prepare("SELECT COUNT(*) c FROM order_items oi JOIN orders o ON o.id = oi.order_id WHERE oi.product_id = ? AND o.status != 'cancelled'").get(id).c;
+  if (inOrders > 0) return res.status(400).json({ error: 'এই পণ্য সক্রিয় অর্ডারে আছে — আগে অর্ডার বাতিল করুন, অথবা পণ্যটি নিষ্ক্রিয় (active=0) করুন' });
+  db.prepare('DELETE FROM products WHERE id = ?').run(id); audit(req.admin.name, 'product_delete', 'id ' + req.params.id); res.json({ ok: true });
+});
 app.post('/api/admin/categories', adminAuth, requireWrite, (req, res) => {
   const name = String((req.body || {}).name || '').trim();
   if (!name) return res.status(400).json({ error: 'ক্যাটাগরির নাম দিন' });
@@ -572,6 +600,25 @@ app.post('/api/admin/stock/adjust', adminAuth, requireWrite, (req, res) => {
 });
 app.post('/api/admin/stock-alerts/:id/notify', adminAuth, requireWrite, (req, res) => { res.json({ ok: true, note: 'WhatsApp-এ জানানোর লিংক তৈরি হয়েছে' }); });
 
+// Restore exactly what an order took from stock (product + variant), once.
+function restoreStockForOrder(o, reason) {
+  db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(o.id).forEach(it => {
+    const pTake = it.stock_taken || 0, vTake = it.variant_taken || 0;
+    if (pTake > 0) {
+      db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?').run(pTake, it.product_id);
+      db.prepare('INSERT INTO stock_movements (product_id, qty, reason, created_at) VALUES (?, ?, ?, ?)').run(it.product_id, pTake, reason + ' ' + o.order_number, nowIso());
+    }
+    if (vTake > 0 && it.variant_id) db.prepare('UPDATE variants SET stock = stock + ? WHERE id = ?').run(vTake, it.variant_id);
+  });
+}
+// Status moves that are never allowed: out of cancelled (terminal), or back from delivered.
+function statusMoveAllowed(from, to) {
+  if (from === to) return true;
+  if (from === 'cancelled') return false;
+  if (from === 'delivered' && (to === 'pending' || to === 'confirmed' || to === 'shipped')) return false;
+  return true;
+}
+
 // Orders
 app.post('/api/admin/orders/:id/status', adminAuth, requireWrite, (req, res) => {
   const { status } = req.body || {};
@@ -579,12 +626,8 @@ app.post('/api/admin/orders/:id/status', adminAuth, requireWrite, (req, res) => 
   if (!ok.includes(status)) return res.status(400).json({ error: 'ভুল স্ট্যাটাস' });
   const o = db.prepare('SELECT * FROM orders WHERE id = ?').get(Number(req.params.id));
   if (!o) return res.status(404).json({ error: 'অর্ডার পাওয়া যায়নি' });
-  if (status === 'cancelled' && o.status !== 'cancelled') {
-    db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(o.id).forEach(it => {
-      db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?').run(it.qty, it.product_id);
-      db.prepare('INSERT INTO stock_movements (product_id, qty, reason, created_at) VALUES (?, ?, ?, ?)').run(it.product_id, it.qty, 'cancel ' + o.order_number, nowIso());
-    });
-  }
+  if (!statusMoveAllowed(o.status, status)) return res.status(400).json({ error: 'এই স্ট্যাটাস পরিবর্তন করা যাবে না (' + o.status + ' → ' + status + ')' });
+  if (status === 'cancelled' && o.status !== 'cancelled') restoreStockForOrder(o, 'cancel');
   if (status === 'shipped' && o.status !== 'shipped') queueSms(o.phone, 'রঙধনু ফ্যাশন: আপনার অর্ডার ' + o.order_number + ' পাঠানো হয়েছে।');
   if (status === 'delivered' && o.status !== 'delivered') queueSms(o.phone, 'রঙধনু ফ্যাশন: আপনার অর্ডার ' + o.order_number + ' ডেলিভারি হয়েছে। ধন্যবাদ!');
   db.prepare('UPDATE orders SET status = ? WHERE id = ?').run(status, o.id);
@@ -594,15 +637,15 @@ app.post('/api/admin/orders/:id/status', adminAuth, requireWrite, (req, res) => 
 app.post('/api/admin/orders/bulk-status', adminAuth, requireWrite, (req, res) => {
   const { ids, status } = req.body || {};
   if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'অর্ডার সিলেক্ট করুন' });
-  let updated = 0;
+  let updated = 0, skipped = 0;
   for (const id of ids) {
     const o = db.prepare('SELECT * FROM orders WHERE id = ?').get(Number(id));
-    if (!o) continue;
-    if (status === 'cancelled' && o.status !== 'cancelled') db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(o.id).forEach(it => db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?').run(it.qty, it.product_id));
+    if (!o || !statusMoveAllowed(o.status, status)) { skipped++; continue; }
+    if (status === 'cancelled' && o.status !== 'cancelled') restoreStockForOrder(o, 'cancel');
     db.prepare('UPDATE orders SET status = ? WHERE id = ?').run(status, o.id); updated++;
   }
-  audit(req.admin.name, 'order_bulk_status', updated + ' orders -> ' + status);
-  res.json({ ok: true, updated });
+  audit(req.admin.name, 'order_bulk_status', updated + ' orders -> ' + status + (skipped ? ' (' + skipped + ' বাদ)' : ''));
+  res.json({ ok: true, updated, skipped });
 });
 app.post('/api/admin/orders/:id/note', adminAuth, requireWrite, (req, res) => { db.prepare('UPDATE orders SET internal_note = ? WHERE id = ?').run(String((req.body || {}).note || '').slice(0, 500), Number(req.params.id)); res.json({ ok: true }); });
 app.post('/api/admin/orders/:id/courier', adminAuth, requireWrite, (req, res) => {
@@ -624,7 +667,10 @@ app.post('/api/admin/returns/:id/status', adminAuth, requireWrite, (req, res) =>
   const r = db.prepare('SELECT * FROM returns WHERE id = ?').get(Number(req.params.id));
   if (!r) return res.status(404).json({ error: 'রিটার্ন পাওয়া যায়নি' });
   if (status === 'received' && r.status !== 'received') {
-    db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(r.order_id).forEach(it => db.prepare('UPDATE products SET stock = stock + ? WHERE id = ?').run(it.qty, it.product_id));
+    const ord = db.prepare('SELECT * FROM orders WHERE id = ?').get(r.order_id);
+    // Restock only what the order actually took, and never if the order was cancelled
+    // (cancel already restored it — restocking again would invent stock).
+    if (ord && ord.status !== 'cancelled') restoreStockForOrder(ord, 'return received');
   }
   db.prepare('UPDATE returns SET status = ? WHERE id = ?').run(status, r.id);
   audit(req.admin.name, 'return_status', r.order_number + ' -> ' + status);
@@ -667,9 +713,19 @@ app.post('/api/admin/settings', adminAuth, requireWrite, (req, res) => {
   }
   const fields = ['shop_name', 'whatsapp_number', 'bkash_number', 'nagad_number', 'announcement', 'about_text', 'delivery_info', 'return_policy', 'business_email', 'maps_url', 'ga4_id', 'pixel_id', 'gsc_code', 'support_package', 'support_until', 'promo_code', 'flash_name', 'flash_ends_at', 'steadfast_api_key', 'steadfast_secret', 'sms_api_key', 'bkash_username', 'nagad_username', 'seo_title', 'seo_description', 'pickup_address', 'hotline'];
   const vals = {};
-  fields.forEach(f => { vals[f] = b[f] !== undefined ? String(b[f]) : cur[f]; });
+  // API keys: the admin form sends empty fields when the key is unchanged — an empty
+  // string must NEVER wipe a saved key. Only a non-empty value overwrites it.
+  const keyFields = ['steadfast_api_key', 'steadfast_secret', 'sms_api_key'];
+  fields.forEach(f => {
+    if (keyFields.includes(f)) vals[f] = (b[f] !== undefined && String(b[f]).trim() !== '') ? String(b[f]) : cur[f];
+    else vals[f] = b[f] !== undefined ? String(b[f]) : cur[f];
+  });
+  // Numeric fields: an empty/cleared input means "keep current", never 0.
+  const numOrCur = (v, curV) => (v === undefined || v === '' || v === null) ? curV : money(v);
+  if (vals.ga4_id && !/^G-[A-Z0-9]{4,}$/.test(vals.ga4_id)) return res.status(400).json({ error: 'GA4 ID ভুল ফরম্যাট (যেমন G-ABC1234)' });
+  if (vals.pixel_id && !/^\d{6,}$/.test(vals.pixel_id)) return res.status(400).json({ error: 'Facebook Pixel ID শুধু সংখ্যা হতে হবে' });
   db.prepare('UPDATE settings SET shop_name=?, whatsapp_number=?, bkash_number=?, nagad_number=?, delivery_inside=?, delivery_outside=?, free_delivery_threshold=?, announcement=?, about_text=?, delivery_info=?, return_policy=?, pin_hash=?, business_email=?, maps_url=?, ga4_id=?, pixel_id=?, gsc_code=?, support_package=?, support_until=?, promo_code=?, flash_name=?, flash_percent=?, flash_ends_at=?, gift_wrap_fee=?, loyalty_enabled=?, combo_enabled=?, combo_buy=?, combo_free=?, preorder_enabled=?, steadfast_api_key=?, steadfast_secret=?, sms_api_key=?, bkash_username=?, nagad_username=?, seo_title=?, seo_description=?, pickup_address=?, hotline=? WHERE id=1')
-    .run(vals.shop_name.slice(0, 120), vals.whatsapp_number, vals.bkash_number, vals.nagad_number, money(b.delivery_inside ?? cur.delivery_inside), money(b.delivery_outside ?? cur.delivery_outside), money(b.free_delivery_threshold ?? cur.free_delivery_threshold), vals.announcement, vals.about_text, vals.delivery_info, vals.return_policy, pinHash, vals.business_email, vals.maps_url, vals.ga4_id, vals.pixel_id, vals.gsc_code, vals.support_package, vals.support_until, vals.promo_code, vals.flash_name, money(b.flash_percent ?? cur.flash_percent), vals.flash_ends_at, money(b.gift_wrap_fee ?? cur.gift_wrap_fee), b.loyalty_enabled === undefined ? cur.loyalty_enabled : (b.loyalty_enabled ? 1 : 0), b.combo_enabled === undefined ? cur.combo_enabled : (b.combo_enabled ? 1 : 0), money(b.combo_buy ?? cur.combo_buy), money(b.combo_free ?? cur.combo_free), b.preorder_enabled === undefined ? cur.preorder_enabled : (b.preorder_enabled ? 1 : 0), vals.steadfast_api_key, vals.steadfast_secret, vals.sms_api_key, vals.bkash_username, vals.nagad_username, vals.seo_title, vals.seo_description, vals.pickup_address, vals.hotline);
+    .run(vals.shop_name.slice(0, 120), vals.whatsapp_number, vals.bkash_number, vals.nagad_number, numOrCur(b.delivery_inside, cur.delivery_inside), numOrCur(b.delivery_outside, cur.delivery_outside), numOrCur(b.free_delivery_threshold, cur.free_delivery_threshold), vals.announcement, vals.about_text, vals.delivery_info, vals.return_policy, pinHash, vals.business_email, vals.maps_url, vals.ga4_id, vals.pixel_id, vals.gsc_code, vals.support_package, vals.support_until, vals.promo_code, vals.flash_name, numOrCur(b.flash_percent, cur.flash_percent), vals.flash_ends_at, numOrCur(b.gift_wrap_fee, cur.gift_wrap_fee), b.loyalty_enabled === undefined ? cur.loyalty_enabled : (b.loyalty_enabled ? 1 : 0), b.combo_enabled === undefined ? cur.combo_enabled : (b.combo_enabled ? 1 : 0), numOrCur(b.combo_buy, cur.combo_buy), numOrCur(b.combo_free, cur.combo_free), b.preorder_enabled === undefined ? cur.preorder_enabled : (b.preorder_enabled ? 1 : 0), vals.steadfast_api_key, vals.steadfast_secret, vals.sms_api_key, vals.bkash_username, vals.nagad_username, vals.seo_title, vals.seo_description, vals.pickup_address, vals.hotline);
   audit(req.admin.name, 'settings_update', 'Store settings saved');
   res.json({ ok: true });
 });
@@ -730,4 +786,10 @@ app.get('/api/admin/backup', adminAuth, (req, res) => {
 app.get('/health', (req, res) => res.json({ ok: true }));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'public', 'admin.html')));
+// JSON errors, never an HTML stack trace for API callers.
+app.use((err, req, res, next) => {
+  if (err && err.type === 'entity.parse.failed') return res.status(400).json({ error: 'ভুল ডেটা পাঠানো হয়েছে' });
+  console.error(err);
+  res.status(500).json({ error: 'সার্ভারে ভুল হয়েছে — আবার চেষ্টা করুন' });
+});
 app.listen(PORT, () => console.log('Rongdhonu Fashion running at http://localhost:' + PORT + ' (admin PIN 1234)'));

@@ -16,9 +16,10 @@ const LABELS = {}; GROUPS.forEach(g => g.items.forEach(i => LABELS[i[0]] = i[1])
 async function api(path, opts = {}) {
   const r = await fetch(path, { ...opts, headers: { 'Content-Type': 'application/json', 'x-admin-token': TOKEN, ...(opts.headers || {}) } });
   const d = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(d.error || 'ভুল হয়েছে');
+  if (!r.ok) { const e = new Error(d.error || 'ভুল হয়েছে'); e.status = r.status; throw e; }
   return d;
 }
+function dl(path) { return path + (path.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(TOKEN); }
 async function login() {
   try {
     const d = await api('/api/admin/login', { method: 'POST', body: JSON.stringify({ pin: $('#pin').value }) });
@@ -27,9 +28,21 @@ async function login() {
     showShell(); await loadData();
   } catch (e) { $('#err').innerHTML = '<div class="err">' + e.message + '</div>'; }
 }
+document.getElementById('pin').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeAdminModal(); });
 function logout() { TOKEN = ''; ROLE = ''; ANAME = ''; sessionStorage.removeItem('rf_admin_token'); sessionStorage.removeItem('rf_admin_role'); sessionStorage.removeItem('rf_admin_name'); location.reload(); }
 function showShell() { $('#loginWrap').style.display = 'none'; $('#shell').style.display = ''; $('#logoutBtn').style.display = ''; $('#adminWho').textContent = ANAME + ' (' + ROLE + ')'; }
-async function loadData() { try { DATA = await api('/api/admin/data'); render(); } catch (e) { logout(); } }
+async function loadData() {
+  try { DATA = await api('/api/admin/data'); render(); }
+  catch (e) {
+    if (e.status === 401) { logout(); return; }
+    // Transient failure (e.g. free-tier cold start) — do NOT log the admin out.
+    const el = $('#app');
+    if (el) el.innerHTML = '<div class="err">ডেটা লোড হয়নি (' + e.message + ')</div><p><button class="btn" onclick="loadData()">আবার চেষ্টা করুন</button></p>';
+  }
+}
+function toastAdmin(msg) { const el = $('#app'); if (el) { const d = document.createElement('div'); d.className = 'ok'; d.textContent = msg; el.prepend(d); setTimeout(() => d.remove(), 3000); } }
+async function safe(promise, okMsg) { try { const d = await promise; if (okMsg) toastAdmin(okMsg); return d; } catch (e) { alert(e.message); return null; } }
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function money(n) { return '৳' + Number(n || 0).toLocaleString(); }
 function help(text) { return '<div class="help">' + text + '</div>'; }
@@ -60,7 +73,7 @@ function render() {
       help('আজকের কাজ: পেন্ডিং অর্ডার কনফার্ম করুন, কুরিয়ারে পার্সেল দিন, নতুন রিটার্ন থাকলে দেখুন।') +
       '<h3>সাম্প্রতিক অর্ডার</h3><table><tr><th>অর্ডার</th><th>ক্রেতা</th><th>মোট</th><th>স্ট্যাটাস</th></tr>' +
       DATA.orders.slice(0, 5).map(o => '<tr><td>' + o.order_number + '</td><td>' + esc(o.customer_name) + '</td><td>' + money(o.total) + '</td><td><span class="pill ' + o.status + '">' + o.status + '</span></td></tr>').join('') + '</table>' +
-      '<p style="margin-top:12px"><a class="btn ghost small" href="/api/admin/backup" target="_blank">ব্যাকআপ JSON ডাউনলোড</a> <a class="btn ghost small" href="/api/admin/export/orders.csv">Orders CSV</a></p>' +
+      '<p style="margin-top:12px"><a class="btn ghost small" href="' + dl('/api/admin/backup') + '" target="_blank">ব্যাকআপ JSON ডাউনলোড</a> <a class="btn ghost small" href="' + dl('/api/admin/export/orders.csv') + '">Orders CSV</a></p>' +
       '<h3>অডিট লগ (সাম্প্রতিক)</h3><table><tr><th>সময়</th><th>কে</th><th>কাজ</th><th>বিবরণ</th></tr>' +
       DATA.audit.slice(0, 10).map(a => '<tr><td>' + a.created_at.slice(0, 19).replace('T', ' ') + '</td><td>' + esc(a.actor) + '</td><td>' + esc(a.action) + '</td><td>' + esc(a.detail) + '</td></tr>').join('') + '</table>';
   }
@@ -72,12 +85,13 @@ function render() {
       '<h3>গত ৭ দিনের বিক্রি</h3><table><tr><th>তারিখ</th><th>অর্ডার</th><th>মোট</th></tr>' + a.daily.map(d => '<tr><td>' + d.d + '</td><td>' + d.orders + '</td><td>' + money(d.total) + '</td></tr>').join('') + '</table>' +
       '<h3>ক্যাটাগরি অনুযায়ী</h3><table><tr><th>ক্যাটাগরি</th><th>মোট</th></tr>' + a.byCategory.map(c => '<tr><td>' + esc(c.category) + '</td><td>' + money(c.total) + '</td></tr>').join('') + '</table>' +
       '<h3>পেমেন্ট অনুযায়ী</h3><table><tr><th>মাধ্যম</th><th>অর্ডার</th><th>মোট</th></tr>' + a.byPayment.map(c => '<tr><td>' + c.method + '</td><td>' + c.orders + '</td><td>' + money(c.total) + '</td></tr>').join('') + '</table>' +
-      '<h3>সেরা পণ্য</h3><table><tr><th>পণ্য</th><th>বিক্রি</th></tr>' + a.topProducts.map(p => '<tr><td>' + esc(p.name) + '</td><td>' + p.soldCount + '</td></tr>').join('') + '</table>';
+      '<h3>সেরা পণ্য</h3><table><tr><th>পণ্য</th><th>বিক্রি</th></tr>' + a.topProducts.map(p => '<tr><td>' + esc(p.name) + '</td><td>' + p.soldCount + '</td></tr>').join('') + '</table>' +
+      '<h3>সেরা জেলা</h3><table><tr><th>জেলা</th><th>অর্ডার</th><th>মোট</th></tr>' + (a.byDistrict || []).map(x => '<tr><td>' + esc(x.district || '—') + '</td><td>' + x.orders + '</td><td>' + money(x.total) + '</td></tr>').join('') + '</table>';
   }
   // ---- Launch checklist ----
   if (TAB === 'launch') {
     t.innerHTML = help('$২০০ প্যাকের লঞ্চ চেকলিস্ট — প্রতিটি আসল সেটিংস/ডেটা থেকে হিসাব করা।') +
-      '<p><button class="btn" onclick="fillGaps()">খালি ঘাটতি এক ক্লিকে পূরণ করুন</button> <a class="btn ghost" href="/api/admin/backup" target="_blank">ব্যাকআপ JSON ডাউনলোড</a> <a class="btn ghost" href="/api/admin/export/products.csv">Products CSV</a></p><div id="lc"></div>';
+      '<p><button class="btn" onclick="fillGaps()">খালি ঘাটতি এক ক্লিকে পূরণ করুন</button> <a class="btn ghost" href="' + dl('/api/admin/backup') + '" target="_blank">ব্যাকআপ JSON ডাউনলোড</a> <a class="btn ghost" href="' + dl('/api/admin/export/products.csv') + '">Products CSV</a></p><div id="lc"></div>';
     api('/api/admin/launch-checklist').then(d => {
       $('#lc').innerHTML = '<p><b>' + d.done + '/' + d.total + ' সম্পন্ন</b></p><table><tr><th>কাজ</th><th>অবস্থা</th><th>কী করতে হবে</th></tr>' +
         d.items.map(i => '<tr><td>' + i.label + '</td><td>' + (i.done ? 'সম্পন্ন' : 'বাকি') + '</td><td class="small">' + i.hint + '</td></tr>').join('') + '</table>';
@@ -85,7 +99,7 @@ function render() {
   }
   // ---- Orders ----
   if (TAB === 'orders') {
-    t.innerHTML = ro + '<p><button class="btn ghost small" onclick="bulkStatus(\'confirmed\')">সিলেক্ট করা গুলো কনফার্ম করুন</button> <button class="btn ghost small" onclick="bulkStatus(\'shipped\')">পাঠানো হয়েছে করুন</button> <a class="btn ghost small" href="/api/admin/export/orders.csv">Orders CSV</a> <a class="btn ghost small" href="/api/admin/export/steadfast.csv">Steadfast CSV</a> <a class="btn ghost small" href="/api/admin/export/courier.csv?courier=Pathao">Pathao CSV</a></p>' +
+    t.innerHTML = ro + '<p><button class="btn ghost small" onclick="bulkStatus(\'confirmed\')">সিলেক্ট করা গুলো কনফার্ম করুন</button> <button class="btn ghost small" onclick="bulkStatus(\'shipped\')">পাঠানো হয়েছে করুন</button> <a class="btn ghost small" href="' + dl('/api/admin/export/orders.csv') + '">Orders CSV</a> <a class="btn ghost small" href="' + dl('/api/admin/export/steadfast.csv') + '">Steadfast CSV</a> <a class="btn ghost small" href="' + dl('/api/admin/export/courier.csv?courier=Pathao') + '">Pathao CSV</a></p>' +
       '<input placeholder="অর্ডার / ক্রেতা / ফোন খুঁজুন…" oninput="renderOrders(this.value)"><div id="oList"></div><div id="oDetail"></div>';
     renderOrders('');
   }
@@ -124,7 +138,7 @@ function render() {
       '<div class="row"><input id="npPrice" type="number" placeholder="দাম ৳ *"><input id="npCost" type="number" placeholder="কেনা দাম ৳"><input id="npStock" type="number" placeholder="স্টক"></div>' +
       '<div class="row"><input id="npSku" placeholder="SKU"><input id="npVendor" type="number" placeholder="ভেন্ডর ID (ঐচ্ছিক)"></div>' +
       '<div class="row"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="npPre" style="width:auto"> প্রি-অর্ডার চালু</label><input id="npEta" placeholder="প্রি-অর্ডার ETA (যেমন ৭ দিন)"></div>' +
-      '<input id="npDesc" placeholder="বিবরণ"><p><button class="btn" onclick="addProduct()">পণ্য যোগ করুন</button> <button class="btn ghost" onclick="importProducts()">CSV থেকে ইমপোর্ট (নমুনা)</button></p><div id="pErr"></div>' +
+      '<input id="npDesc" placeholder="বিবরণ"><p><button class="btn" id="pSaveBtn" onclick="saveProduct()">পণ্য যোগ করুন</button> <button class="btn ghost" id="pCancelEdit" style="display:none" onclick="cancelEditProduct()">নতুন পণ্য</button> <button class="btn ghost" onclick="importProducts()">CSV থেকে ইমপোর্ট করুন</button></p><p class="small">CSV ফরম্যাট: নাম, ক্যাটাগরি, দাম, কেনা দাম, স্টক, SKU, বিবরণ (প্রথম লাইনে হেডার থাকতে পারে)।</p><div id="pErr"></div>' +
       '<input placeholder="পণ্য খুঁজুন…" oninput="renderProducts(this.value)"><div id="pList"></div>';
     renderProducts('');
   }
@@ -133,12 +147,12 @@ function render() {
     t.innerHTML = ro + '<div class="row"><input id="ncName" placeholder="নতুন ক্যাটাগরি"><input id="ncParent" type="number" placeholder="প্যারেন্ট ID (সাবক্যাটাগরির জন্য, খালি রাখলে মূল)"><button class="btn" onclick="addCategory()">যোগ করুন</button></div>' +
       DATA.categories.map(c => '<p>' + esc(c.name) + (c.parent_id ? ' — সাবক্যাটাগরি' : '') + ' <button class="btn ghost small" onclick="delCategory(' + c.id + ')">মুছুন</button></p>').join('') +
       '<h3>সাবক্যাটাগরি</h3><div class="row"><input id="scCat" type="number" placeholder="ক্যাটাগরি ID"><input id="scName" placeholder="সাবক্যাটাগরির নাম"><button class="btn" onclick="addSubcat()">যোগ করুন</button></div>' +
-      DATA.subcategories.map(s => '<p>' + esc(s.name) + ' (ক্যাটাগরি ' + s.category_id + ') <button class="btn ghost small" onclick="delGeneric(\'subcategories\',' + s.id + ')">মুছুন</button></p>').join('');
+      DATA.subcategories.map(s => '<p>' + esc(s.name) + ' (ক্যাটাগরি ' + s.category_id + ') <button class="btn ghost small" onclick="editGeneric(\'subcategories\',' + s.id + ')">এডিট</button> <button class="btn ghost small" onclick="delGeneric(\'subcategories\',' + s.id + ')">মুছুন</button></p>').join('');
   }
   // ---- Collections ----
   if (TAB === 'collections') {
     t.innerHTML = ro + '<div class="row"><input id="colName" placeholder="কালেকশনের নাম"><input id="colDesc" placeholder="বিবরণ"></div><p><button class="btn" onclick="addGeneric(\'collections\', {name: document.getElementById(\'colName\').value, description: document.getElementById(\'colDesc\').value})">কালেকশন যোগ করুন</button></p>' +
-      DATA.collections.map(c => '<p><b>' + esc(c.name) + '</b> — ' + esc(c.description) + ' <button class="btn ghost small" onclick="delGeneric(\'collections\',' + c.id + ')">মুছুন</button></p>').join('');
+      DATA.collections.map(c => '<p><b>' + esc(c.name) + '</b> — ' + esc(c.description) + ' <button class="btn ghost small" onclick="editGeneric(\'collections\',' + c.id + ')">এডিট</button> <button class="btn ghost small" onclick="delGeneric(\'collections\',' + c.id + ')">মুছুন</button></p>').join('');
   }
   // ---- Variants ----
   if (TAB === 'variants') {
@@ -149,7 +163,7 @@ function render() {
   // ---- Vendors ----
   if (TAB === 'vendors') {
     t.innerHTML = ro + '<div class="row"><input id="vnName" placeholder="ভেন্ডরের নাম"><input id="vnPhone" placeholder="ফোন"><input id="vnComm" type="number" placeholder="কমিশন %"></div><p><button class="btn" onclick="addGeneric(\'vendors\', {name: document.getElementById(\'vnName\').value, phone: document.getElementById(\'vnPhone\').value, commission_percent: document.getElementById(\'vnComm\').value})">ভেন্ডর যোগ করুন</button></p>' +
-      DATA.vendors.map(v => '<p><b>' + esc(v.name) + '</b> — ' + esc(v.phone) + ' · কমিশন ' + v.commission_percent + '% <button class="btn ghost small" onclick="delGeneric(\'vendors\',' + v.id + ')">মুছুন</button></p>').join('');
+      DATA.vendors.map(v => '<p><b>' + esc(v.name) + '</b> — ' + esc(v.phone) + ' · কমিশন ' + v.commission_percent + '% <button class="btn ghost small" onclick="editGeneric(\'vendors\',' + v.id + ')">এডিট</button> <button class="btn ghost small" onclick="delGeneric(\'vendors\',' + v.id + ')">মুছুন</button></p>').join('');
   }
   // ---- Inventory ----
   if (TAB === 'inventory') {
@@ -163,40 +177,41 @@ function render() {
   // ---- Courier ----
   if (TAB === 'courier') {
     t.innerHTML = ro + '<div class="note">লাইভ Steadfast API-র জন্য Settings-এ API key লাগবে। আপাতত CSV ডাউনলোড করে কুরিয়ার প্যানেলে আপলোড করুন।</div>' +
-      '<p><a class="btn" href="/api/admin/export/steadfast.csv">Steadfast Bulk CSV</a> <a class="btn ghost" href="/api/admin/export/courier.csv?courier=Pathao">Pathao CSV</a> <a class="btn ghost" href="/api/admin/export/courier.csv?courier=RedX">RedX CSV</a></p>' +
+      '<p><a class="btn" href="' + dl('/api/admin/export/steadfast.csv') + '">Steadfast Bulk CSV</a> <a class="btn ghost" href="' + dl('/api/admin/export/courier.csv?courier=Pathao') + '">Pathao CSV</a> <a class="btn ghost" href="' + dl('/api/admin/export/courier.csv?courier=RedX') + '">RedX CSV</a></p>' +
       '<table><tr><th>অর্ডার</th><th>কুরিয়ার</th><th>কনসাইনমেন্ট ID</th><th>স্ট্যাটাস</th><th>ফি</th><th></th></tr>' +
       DATA.orders.map(o => '<tr><td>' + o.order_number + '</td><td><select id="cr-' + o.id + '">' + ['Steadfast', 'Pathao', 'RedX'].map(c => '<option ' + (o.courier === c ? 'selected' : '') + '>' + c + '</option>').join('') + '</select></td>' +
         '<td><input id="cs-' + o.id + '" value="' + esc(o.consignment_id) + '" placeholder="SF-..."></td>' +
         '<td><input id="cst-' + o.id + '" value="' + esc(o.courier_status) + '" placeholder="in_transit"></td>' +
         '<td><input id="cf-' + o.id + '" type="number" value="' + o.courier_fee + '"></td>' +
-        '<td><button class="btn small" onclick="saveCourier(' + o.id + ')">সেভ</button> <button class="btn ghost small" onclick="printLabel(' + o.id + ')">লেবেল প্রিন্ট</button></td></tr>').join('') + '</table><div id="labelOut"></div>';
+        '<td><button class="btn small" onclick="saveCourier(' + o.id + ')">সেভ</button> <button class="btn ghost small" onclick="printLabel(' + o.id + ')">লেবেল প্রিন্ট</button></td></tr>').join('') + '</table>';
   }
   // ---- Shipping zones ----
   if (TAB === 'shipping') {
     t.innerHTML = ro + '<p class="small">শিপিং জোন কুরিয়ার পরিকল্পনার রেফারেন্স — চেকআউটের চার্জ এখনো Settings-এর ঢাকার ভিতরে/বাইরে হার থেকে আসে।</p>' +
       '<div class="row"><input id="szName" placeholder="জোনের নাম"><input id="szDist" placeholder="জেলা (কমা দিয়ে)"><input id="szCharge" type="number" placeholder="চার্জ ৳"></div><p><button class="btn" onclick="addGeneric(\'shipping_zones\', {name: document.getElementById(\'szName\').value, districts: document.getElementById(\'szDist\').value, charge: document.getElementById(\'szCharge\').value})">জোন যোগ করুন</button></p>' +
-      DATA.shipping_zones.map(z => '<p><b>' + esc(z.name) + '</b> — ' + esc(z.districts) + ' · ৳' + z.charge + ' <button class="btn ghost small" onclick="delGeneric(\'shipping_zones\',' + z.id + ')">মুছুন</button></p>').join('');
+      DATA.shipping_zones.map(z => '<p><b>' + esc(z.name) + '</b> — ' + esc(z.districts) + ' · ৳' + z.charge + ' <button class="btn ghost small" onclick="editGeneric(\'shipping_zones\',' + z.id + ')">এডিট</button> <button class="btn ghost small" onclick="delGeneric(\'shipping_zones\',' + z.id + ')">মুছুন</button></p>').join('');
   }
   // ---- Campaigns / Banners / CMS / FAQs / Testimonials / Reviews / Questions / Subscribers ----
   if (TAB === 'campaigns') {
     t.innerHTML = ro + '<div class="row"><input id="cmName" placeholder="ক্যাম্পেইনের নাম"><input id="cmPct" type="number" placeholder="ছাড় %"></div><input id="cmDesc" placeholder="বিবরণ"><p><button class="btn" onclick="addGeneric(\'campaigns\', {name: document.getElementById(\'cmName\').value, description: document.getElementById(\'cmDesc\').value, discount_percent: document.getElementById(\'cmPct\').value})">ক্যাম্পেইন যোগ করুন</button></p>' +
-      DATA.campaigns.map(c => '<p><b>' + esc(c.name) + '</b> — ' + c.discount_percent + '% ছাড় <button class="btn ghost small" onclick="delGeneric(\'campaigns\',' + c.id + ')">মুছুন</button></p>').join('');
+      DATA.campaigns.map(c => '<p><b>' + esc(c.name) + '</b> — ' + c.discount_percent + '% ছাড় <button class="btn ghost small" onclick="editGeneric(\'campaigns\',' + c.id + ')">এডিট</button> <button class="btn ghost small" onclick="delGeneric(\'campaigns\',' + c.id + ')">মুছুন</button></p>').join('');
   }
   if (TAB === 'banners') {
     t.innerHTML = ro + '<div class="row"><input id="bnTitle" placeholder="ব্যানারের শিরোনাম"><input id="bnSub" placeholder="সাবটাইটেল"><select id="bnPos"><option>hero</option><option>top</option><option>footer</option></select></div><p><button class="btn" onclick="addGeneric(\'banners\', {title: document.getElementById(\'bnTitle\').value, subtitle: document.getElementById(\'bnSub\').value, position: document.getElementById(\'bnPos\').value})">ব্যানার যোগ করুন</button></p>' +
-      DATA.banners.map(b => '<p><b>' + esc(b.title) + '</b> — ' + esc(b.position) + ' <button class="btn ghost small" onclick="delGeneric(\'banners\',' + b.id + ')">মুছুন</button></p>').join('');
+      DATA.banners.map(b => '<p><b>' + esc(b.title) + '</b> — ' + esc(b.position) + ' <button class="btn ghost small" onclick="editGeneric(\'banners\',' + b.id + ')">এডিট</button> <button class="btn ghost small" onclick="delGeneric(\'banners\',' + b.id + ')">মুছুন</button></p>').join('');
   }
   if (TAB === 'cms') {
     t.innerHTML = ro + '<div class="row"><input id="cmsSlug" placeholder="slug (যেমন about)"><input id="cmsTitle" placeholder="শিরোনাম"></div><textarea id="cmsBody" placeholder="লেখা"></textarea><p><button class="btn" onclick="addGeneric(\'cms_pages\', {slug: document.getElementById(\'cmsSlug\').value, title: document.getElementById(\'cmsTitle\').value, body: document.getElementById(\'cmsBody\').value})">পেজ যোগ করুন</button></p>' +
-      DATA.cms_pages.map(p => '<p><b>' + esc(p.title) + '</b> — /' + esc(p.slug) + ' <button class="btn ghost small" onclick="delGeneric(\'cms_pages\',' + p.id + ')">মুছুন</button></p>').join('');
+      DATA.cms_pages.map(p => '<p><b>' + esc(p.title) + '</b> — /' + esc(p.slug) + ' <button class="btn ghost small" onclick="editGeneric(\'cms_pages\',' + p.id + ')">এডিট</button> <button class="btn ghost small" onclick="delGeneric(\'cms_pages\',' + p.id + ')">মুছুন</button></p>').join('');
   }
   if (TAB === 'faqs') {
     t.innerHTML = ro + '<input id="fqQ" placeholder="প্রশ্ন"><textarea id="fqA" placeholder="উত্তর"></textarea><p><button class="btn" onclick="addGeneric(\'faqs\', {question: document.getElementById(\'fqQ\').value, answer: document.getElementById(\'fqA\').value})">FAQ যোগ করুন</button></p>' +
-      DATA.faqs.map(f => '<p><b>' + esc(f.question) + '</b><br>' + esc(f.answer) + ' <button class="btn ghost small" onclick="delGeneric(\'faqs\',' + f.id + ')">মুছুন</button></p>').join('');
+      DATA.faqs.map(f => '<p><b>' + esc(f.question) + '</b><br>' + esc(f.answer) + ' <button class="btn ghost small" onclick="editGeneric(\'faqs\',' + f.id + ')">এডিট</button> <button class="btn ghost small" onclick="delGeneric(\'faqs\',' + f.id + ')">মুছুন</button></p>').join('');
   }
   if (TAB === 'testimonials') {
     t.innerHTML = ro + '<p class="small">আসল ক্রেতার মতামত এখানে যোগ করুন — ভুয়া মতামত লিখবেন না।</p>' +
-      DATA.testimonials.map(x => '<p><b>' + esc(x.customer_name) + '</b> — ' + x.rating + '/৫<br>' + esc(x.comment) + '</p>').join('');
+      '<div class="row"><input id="tmName" placeholder="ক্রেতার নাম"><input id="tmRate" type="number" min="1" max="5" value="5" placeholder="রেটিং"></div><textarea id="tmComment" placeholder="মতামত"></textarea><p><button class="btn" onclick="addGeneric(\'testimonials\', {customer_name: document.getElementById(\'tmName\').value, comment: document.getElementById(\'tmComment\').value, rating: document.getElementById(\'tmRate\').value})">মতামত যোগ করুন</button></p>' +
+      DATA.testimonials.map(x => '<p><b>' + esc(x.customer_name) + '</b> — ' + x.rating + '/৫<br>' + esc(x.comment) + ' <button class="btn ghost small" onclick="editGeneric(\'testimonials\',' + x.id + ')">এডিট</button> <button class="btn ghost small" onclick="delGeneric(\'testimonials\',' + x.id + ')">মুছুন</button></p>').join('') || '<p>এখনো কোনো মতামত নেই।</p>';
   }
   if (TAB === 'reviews') {
     t.innerHTML = ro + '<table><tr><th>পণ্য</th><th>ক্রেতা</th><th>রেটিং</th><th>মন্তব্য</th><th>অবস্থা</th><th></th></tr>' +
@@ -215,7 +230,7 @@ function render() {
     t.innerHTML = ro + '<h3>লাভ ও খরচ — মোট খরচ ৳' + tot.toLocaleString() + ' · নিট লাভ ৳' + DATA.totals.netProfit.toLocaleString() + '</h3>' +
       '<div class="row"><select id="exCat"><option>প্যাকেজিং</option><option>বিজ্ঞাপন</option><option>ভাড়া</option><option>কুরিয়ার</option><option>অন্যান্য</option></select><input id="exAmt" type="number" placeholder="টাকা *"><input id="exNote" placeholder="নোট"></div>' +
       '<p><button class="btn" onclick="addGeneric(\'expenses\', {category: document.getElementById(\'exCat\').value, amount: document.getElementById(\'exAmt\').value, note: document.getElementById(\'exNote\').value})">খরচ যোগ করুন</button></p>' +
-      '<table><tr><th>তারিখ</th><th>খাত</th><th>টাকা</th><th>নোট</th><th></th></tr>' + DATA.expenses.map(e => '<tr><td>' + e.created_at.slice(0, 10) + '</td><td>' + esc(e.category) + '</td><td>৳' + e.amount + '</td><td>' + esc(e.note) + '</td><td><button class="btn ghost small" onclick="delGeneric(\'expenses\',' + e.id + ')">মুছুন</button></td></tr>').join('') + '</table>';
+      '<table><tr><th>তারিখ</th><th>খাত</th><th>টাকা</th><th>নোট</th><th></th></tr>' + DATA.expenses.map(e => '<tr><td>' + e.created_at.slice(0, 10) + '</td><td>' + esc(e.category) + '</td><td>৳' + e.amount + '</td><td>' + esc(e.note) + '</td><td><button class="btn ghost small" onclick="editGeneric(\'expenses\',' + e.id + ')">এডিট</button> <button class="btn ghost small" onclick="delGeneric(\'expenses\',' + e.id + ')">মুছুন</button></td></tr>').join('') + '</table>';
   }
   // ---- Staff ----
   if (TAB === 'staff') {
@@ -266,25 +281,82 @@ function renderOrders(q) {
 function renderProducts(q) {
   const list = DATA.products.filter(p => !q || (p.name + p.sku + p.category).toLowerCase().includes(q.toLowerCase()));
   $('#pList').innerHTML = '<table><tr><th>পণ্য</th><th>দাম</th><th>কেনা দাম</th><th>স্টক</th><th>বিক্রি</th><th></th></tr>' +
-    list.map(p => '<tr><td>' + esc(p.name) + '<br><small>' + p.sku + ' · ' + p.category + '</small></td><td>৳' + p.price + '</td><td>৳' + (p.cost_price || 0) + '</td><td>' + p.stock + '</td><td>' + p.soldCount + '</td><td><button class="btn ghost small" onclick="delProduct(' + p.id + ')">মুছুন</button></td></tr>').join('') + '</table>';
+    list.map(p => '<tr><td>' + esc(p.name) + '<br><small>' + p.sku + ' · ' + p.category + '</small></td><td>৳' + p.price + '</td><td>৳' + (p.cost_price || 0) + '</td><td>' + p.stock + '</td><td>' + p.soldCount + '</td><td><button class="btn ghost small" onclick="editProduct(' + p.id + ')">এডিট</button> <button class="btn ghost small" onclick="delProduct(' + p.id + ')">মুছুন</button></td></tr>').join('') + '</table>';
 }
-async function addProduct() {
+async function saveProduct() {
+  const id = window._editPid || 0;
+  const body = { name: $('#npName').value, category: $('#npCat').value, price: $('#npPrice').value, cost_price: $('#npCost').value, stock: $('#npStock').value, sku: $('#npSku').value, vendor_id: $('#npVendor').value, allow_preorder: $('#npPre').checked, preorder_eta: $('#npEta').value, description: $('#npDesc').value };
   try {
-    await api('/api/admin/products', { method: 'POST', body: JSON.stringify({ name: $('#npName').value, category: $('#npCat').value, price: $('#npPrice').value, cost_price: $('#npCost').value, stock: $('#npStock').value, sku: $('#npSku').value, vendor_id: $('#npVendor').value, allow_preorder: $('#npPre').checked, preorder_eta: $('#npEta').value, description: $('#npDesc').value }) });
-    await loadData();
+    if (id) await api('/api/admin/products/' + id, { method: 'PUT', body: JSON.stringify(body) });
+    else await api('/api/admin/products', { method: 'POST', body: JSON.stringify(body) });
+    window._editPid = 0; await loadData();
   } catch (e) { $('#pErr').innerHTML = '<div class="err">' + e.message + '</div>'; }
 }
-async function importProducts() {
-  const rows = [{ name: 'নমুনা পণ্য', category: 'শাড়ি', price: 1999, stock: 5, sku: 'SKU-IMP-1' }];
-  const d = await api('/api/admin/products/import', { method: 'POST', body: JSON.stringify({ rows }) });
-  alert(d.added + 'টি পণ্য ইমপোর্ট হয়েছে (নমুনা)। আসল CSV-র জন্য README দেখুন।'); loadData();
+function editProduct(id) {
+  const p = DATA.products.find(x => x.id === id); if (!p) return;
+  window._editPid = id;
+  $('#npName').value = p.name; $('#npCat').value = p.category; $('#npPrice').value = p.price; $('#npCost').value = p.cost_price || ''; $('#npStock').value = p.stock; $('#npSku').value = p.sku || ''; $('#npVendor').value = p.vendor_id || ''; $('#npPre').checked = !!p.allow_preorder; $('#npEta').value = p.preorder_eta || ''; $('#npDesc').value = p.description || '';
+  $('#pSaveBtn').textContent = 'আপডেট করুন'; $('#pCancelEdit').style.display = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function cancelEditProduct() {
+  window._editPid = 0;
+  ['npName', 'npCat', 'npPrice', 'npCost', 'npStock', 'npSku', 'npVendor', 'npEta', 'npDesc'].forEach(i => { document.getElementById(i).value = ''; });
+  $('#npPre').checked = false; $('#pSaveBtn').textContent = 'পণ্য যোগ করুন'; $('#pCancelEdit').style.display = 'none';
+}
+function parseCsv(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (!lines.length) return [];
+  const hasHeader = /name|নাম|price|দাম/i.test(lines[0]);
+  return (hasHeader ? lines.slice(1) : lines).map(l => {
+    // split on commas not inside double quotes
+    const c = l.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
+    const clean = c.map(s => s.trim().replace(/^"|"$/g, '').replace(/""/g, '"'));
+    return { name: clean[0] || '', category: clean[1] || 'শাড়ি', price: Number(clean[2]) || 0, cost_price: Number(clean[3]) || 0, stock: Number(clean[4]) || 0, sku: clean[5] || '', description: clean[6] || '' };
+  }).filter(r => r.name);
+}
+function importProducts() {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.csv,text/csv';
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    const rows = parseCsv(await f.text());
+    if (!rows.length) { alert('CSV-তে কোনো পণ্য পাওয়া যায়নি'); return; }
+    const d = await safe(api('/api/admin/products/import', { method: 'POST', body: JSON.stringify({ rows }) }));
+    if (d) { alert(d.added + 'টি পণ্য ইমপোর্ট হয়েছে (' + rows.length + 'টি লাইনের মধ্যে)'); loadData(); }
+  };
+  inp.click();
 }
 async function delProduct(id) { if (!confirm('পণ্যটি মুছে ফেলবেন?')) return; await api('/api/admin/products/' + id, { method: 'DELETE' }); loadData(); }
 async function addCategory() { await api('/api/admin/categories', { method: 'POST', body: JSON.stringify({ name: $('#ncName').value, parent_id: $('#ncParent').value }) }); loadData(); }
 async function delCategory(id) { await api('/api/admin/categories/' + id, { method: 'DELETE' }); loadData(); }
 async function addSubcat() { await api('/api/admin/subcategories', { method: 'POST', body: JSON.stringify({ category_id: $('#scCat').value, name: $('#scName').value }) }); loadData(); }
-async function addGeneric(table, body) { await api('/api/admin/' + table, { method: 'POST', body: JSON.stringify(body) }); loadData(); }
-async function delGeneric(table, id) { if (!confirm('মুছে ফেলবেন?')) return; await api('/api/admin/' + table + '/' + id, { method: 'DELETE' }); loadData(); }
+async function addGeneric(table, body) { const d = await safe(api('/api/admin/' + table, { method: 'POST', body: JSON.stringify(body) })); if (d) loadData(); }
+async function delGeneric(table, id) { if (!confirm('মুছে ফেলবেন?')) return; const d = await safe(api('/api/admin/' + table + '/' + id, { method: 'DELETE' })); if (d) loadData(); }
+const EDIT_FIELDS = {
+  collections: [['name', 'নাম'], ['description', 'বিবরণ'], ['product_ids', 'পণ্যের ID (JSON)']],
+  banners: [['title', 'শিরোনাম'], ['subtitle', 'সাবটাইটেল'], ['position', 'অবস্থান']],
+  campaigns: [['name', 'নাম'], ['description', 'বিবরণ'], ['discount_percent', 'ছাড় %']],
+  cms_pages: [['slug', 'Slug'], ['title', 'শিরোনাম'], ['body', 'লেখা']],
+  faqs: [['question', 'প্রশ্ন'], ['answer', 'উত্তর']],
+  shipping_zones: [['name', 'জোনের নাম'], ['districts', 'জেলা'], ['charge', 'চার্জ ৳']],
+  vendors: [['name', 'নাম'], ['phone', 'ফোন'], ['commission_percent', 'কমিশন %']],
+  expenses: [['category', 'খাত'], ['amount', 'টাকা'], ['note', 'নোট']],
+  subcategories: [['category_id', 'ক্যাটাগরি ID'], ['name', 'নাম']],
+  testimonials: [['customer_name', 'ক্রেতার নাম'], ['comment', 'মতামত'], ['rating', 'রেটিং']],
+};
+function editGeneric(table, id) {
+  const fields = EDIT_FIELDS[table]; if (!fields) return;
+  const row = (DATA[table] || []).find(x => x.id === id); if (!row) return;
+  openAdminModal('<h3>এডিট — ' + (LABELS[table] || table) + '</h3>' +
+    fields.map(f => '<label>' + f[1] + '</label><input id="eg_' + f[0] + '" value="' + esc(row[f[0]] ?? '') + '">').join('') +
+    '<p><button class="btn" onclick="saveGeneric(\'' + table + '\',' + id + ')">সেভ করুন</button> <button class="btn ghost" onclick="closeAdminModal()">বাতিল</button></p><div id="egErr"></div>');
+}
+async function saveGeneric(table, id) {
+  const body = {};
+  EDIT_FIELDS[table].forEach(f => { body[f[0]] = document.getElementById('eg_' + f[0]).value; });
+  const d = await safe(api('/api/admin/' + table + '/' + id, { method: 'PUT', body: JSON.stringify(body) }));
+  if (d) { closeAdminModal(); loadData(); }
+}
 async function addCoupon() { await api('/api/admin/coupons', { method: 'POST', body: JSON.stringify({ code: $('#ncCode').value, percent: $('#ncPct').value, min_order: $('#ncMin').value }) }); loadData(); }
 async function delCoupon(id) { await api('/api/admin/coupons/' + id, { method: 'DELETE' }); loadData(); }
 async function addVariant() { await api('/api/admin/variants', { method: 'POST', body: JSON.stringify({ product_id: $('#vPid').value, size: $('#vSize').value, color: $('#vColor').value, sku: $('#vSku').value, price_delta: $('#vDelta').value, stock: $('#vStock').value }) }); loadData(); }
@@ -316,8 +388,13 @@ async function saveCourier(id) {
 async function printLabel(id) {
   const d = await api('/api/admin/orders/' + id + '/label', { method: 'POST', body: JSON.stringify({}) });
   const o = d.label;
-  $('#labelOut').innerHTML = '<div class="card"><h4>পার্সেল লেবেল — ' + o.order_number + '</h4><p>প্রাপক: ' + esc(o.customer_name) + '<br>ফোন: ' + esc(o.phone) + '<br>ঠিকানা: ' + esc(o.address) + ', ' + esc(o.thana) + ', ' + esc(o.district) + '<br>কনসাইনমেন্ট: ' + esc(o.consignment_id || '-') + '<br>COD: ৳' + o.total + '</p><p><button class="btn small" onclick="window.print()">প্রিন্ট করুন</button></p></div>';
+  const w = window.open('', '_blank', 'width=520,height=640');
+  if (!w) { alert('পপ-আপ বন্ধ আছে — ব্রাউজারে পপ-আপ চালু করুন'); return; }
+  w.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>লেবেল ' + esc(o.order_number) + '</title><style>body{font-family:system-ui,sans-serif;padding:24px;line-height:1.7}h2{margin:0 0 12px}</style></head><body><h2>পার্সেল লেবেল — ' + esc(o.order_number) + '</h2><p>প্রাপক: <b>' + esc(o.customer_name) + '</b><br>ফোন: ' + esc(o.phone) + '<br>ঠিকানা: ' + esc(o.address) + ', ' + esc(o.thana) + ', ' + esc(o.district) + '<br>কনসাইনমেন্ট: ' + esc(o.consignment_id || '-') + '<br>কুরিয়ার: ' + esc(o.courier || '') + '<br>COD: ৳' + o.total + '<br>পণ্য: ' + o.items.map(i => esc(i.product_name) + ' × ' + i.qty).join(', ') + '</p><script>window.onload=function(){window.print()}</script></body></html>');
+  w.document.close();
 }
+function openAdminModal(html) { $('#modalBox').innerHTML = html; $('#modal').classList.add('open'); }
+function closeAdminModal() { $('#modal').classList.remove('open'); }
 async function addPayment() { await api('/api/admin/payments', { method: 'POST', body: JSON.stringify({ method: $('#pmMethod').value, amount: $('#pmAmt').value, reference: $('#pmRef').value, note: $('#pmNote').value }) }); loadData(); }
 async function delPayment(id) { await api('/api/admin/payments/' + id, { method: 'DELETE' }); loadData(); }
 async function toggleReview(id, approved) { await api('/api/admin/reviews/' + id + '/approve', { method: 'POST', body: JSON.stringify({ approved: approved === 1 }) }); loadData(); }
