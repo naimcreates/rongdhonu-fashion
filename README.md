@@ -68,6 +68,10 @@ full-shop JSON backup. Product CSV import (1–200 rows).
 
 ## Deploy on Render (free tier)
 
+A `render.yaml` Blueprint is included in this repo: on https://render.com →
+New → Blueprint → connect this repo, and Render creates the service
+(build `npm install`, start `npm start`, health check `/health`) for you.
+Or manually:
 1. Push this folder to GitHub (or use the repo it came from).
 2. On https://render.com → New → Web Service → connect the repo.
    - Build command: `npm install`
